@@ -6,7 +6,7 @@ import math
 class Node:
     def __init__(self, node_id, x, y, energy, n, max_num_ants):
         self.node_id = node_id                      # ID of the node
-        self.location = (x, y)                      # (x, y) location of the node
+        self.location = (x,y)                       # (x,y) location of the node
         self.energy = energy                        # Energy of the node
         self.neighbors = []                         # List of neighbors (node ids)
         self.num_neighbors = 0                      # Number of neighbors
@@ -248,7 +248,7 @@ def euclidean_distance(node1, node2):
 
 
 # Function to generate n nodes randomly in a 10x10 area and set neighbors based on distance
-def initialize_nodes(n, side_length, r, initial_energy):
+def initialize_nodes(n, side_length, r, initial_energy, max_num_ants=5):
     """
     Initializes the nodes with unique random locations within a square of side_length x side_length,
     ensuring no two nodes are at the same position.
@@ -260,30 +260,30 @@ def initialize_nodes(n, side_length, r, initial_energy):
         x, y = round(random.uniform(0, side_length), 2), round(random.uniform(0, side_length), 2)
         if (x, y) not in positions:
             positions.add((x, y))
-            new_node = Node(id=len(nodes), x=x, y=y, energy=initial_energy)
+            new_node = Node(node_id=len(nodes), x=x, y=y, energy=initial_energy, n=n, max_num_ants=max_num_ants)
             nodes.append(new_node)
 
     # Adding the sink node at position (10, 10)
-    sink_node = Node(id=n - 1, x=10, y=10, energy=initial_energy)  # Infinite energy for sink
+    sink_node = Node(node_id=n - 1, x=side_length, y=side_length, energy=initial_energy, n=n, max_num_ants=max_num_ants)  # Infinite energy for sink
     nodes.append(sink_node)
 
     # Now calculate neighbors based on communication radius r
     for node in nodes:
         for other_node in nodes:
-            if node.id != other_node.id:
-                distance = math.sqrt((node.x - other_node.x) ** 2 + (node.y - other_node.y) ** 2)
+            if node.node_id != other_node.node_id:
+                distance = euclidean_distance(node, other_node)
                 if distance <= r:
-                    node.neighbors.append(other_node.id)
+                    node.neighbors.append(other_node.node_id)
 
     return nodes
 
 
 # Function to initialize ants with a given source node and sink node
-def initialize_ants(num_ants, source_node, sink_node):
+def initialize_ants(num_ants, source_node, nodes, sink_node):
     ants = []
     
     for i in range(num_ants):
-        ant = Ant(i, source_node, sink_node)  # Assign a unique ant ID
+        ant = Ant(i, source_node, sink_node, nodes[source_node].pheromone_matrix )  # Assign a unique ant ID
         ants.append(ant)
     
     return ants
@@ -474,8 +474,8 @@ def move_data(packet, nodes):
 
     # Find the neighbor with the highest pheromone level (considering the loss ratio)
     for neighbor_id in current_node.neighbors:
-        loss_ratio = current_node.loss_matrix[current_node.id][neighbor_id]
-        pheromone_level = current_node.pheromone_matrix[current_node.id][neighbor_id]
+        loss_ratio = current_node.loss_matrix[current_node.node_id][neighbor_id]
+        pheromone_level = current_node.pheromone_matrix[current_node.node_id][neighbor_id]
 
         # Packet can only be sent if the random value exceeds the loss ratio
         if pheromone_level > max_pheromone and random.random() > loss_ratio:
@@ -492,6 +492,7 @@ def move_data(packet, nodes):
 
 # Example of setting up the network, initializing ants, and moving ants
 n = 30              # Number of nodes
+side_length = 10    # Side length of square area of network
 energy = 1.0        # Same energy level for all nodes
 r = 3.0             # Communication range
 num_ants = 5        # Number of ants
@@ -499,10 +500,10 @@ source_node = 0     # Source node for the ants
 sink_node = 29      # Sink node (destination) for the ants
 
 # Generate nodes
-nodes = generate_nodes(n, energy, r)
+nodes = initialize_nodes(n,side_length, r,energy)
 
 # Initialize ants
-ants = initialize_ants(num_ants, source_node, sink_node)
+ants = initialize_ants(num_ants, source_node, nodes, sink_node)
 
 # Move the first ant
 first_ant = ants[0]
