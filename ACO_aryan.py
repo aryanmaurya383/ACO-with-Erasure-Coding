@@ -4,7 +4,7 @@ import math
 
 # Node Class
 class Node:
-    def __init__(self, node_id, x, y, energy, n):
+    def __init__(self, node_id, x, y, energy, n, max_num_ants):
         self.node_id = node_id                      # ID of the node
         self.location = (x, y)                      # (x, y) location of the node
         self.energy = energy                        # Energy of the node
@@ -12,38 +12,97 @@ class Node:
         self.num_neighbors = 0                      # Number of neighbors
         self.pheromone_matrix = np.zeros((n, n))    # Pheromone matrix (n x n)
         self.loss_matrix = np.zeros((n, n))         # Loss percentage matrix (n x n)
-    
+        self.max_num_ants = max_num_ants            # Max number of ants to be produced
+        self.generated_ants_count = 0               # Number of ants generated
+        self.ants = []                              # List of ants currently at this node
+
     def add_neighbor(self, neighbor_id, pheromone_level, loss_percent):
         self.neighbors.append(neighbor_id)
         self.pheromone_matrix[self.node_id][neighbor_id] = pheromone_level
         self.loss_matrix[self.node_id][neighbor_id] = loss_percent
         self.num_neighbors = len(self.neighbors)
 
+    def initialize_k_ants(self):
+        """
+        Initializes the node by resetting the list of ants for the next iteration.
+        Clears all previously stored ants.
+        """
+        self.ants = []  # Clear the ants list
+        self.generated_ants_count = 0  # Reset the generated ants count
+        print(f"Node {self.node_id}: Initialized for new ants.")
+
+    def generate_ants(self, source_node, sink_node, pheromone_matrix):
+        """
+        Generates one ant if the node has not yet reached its max_num_ants.
+        Updates the internal list of ants and increments the generated_ants_count.
+
+        :param source_node: The ID of the source node where the ant is generated.
+        :param sink_node: The ID of the sink node (destination).
+        :param pheromone_matrix: The pheromone matrix that will be copied to the ant.
+        """
+        # Only generate an ant if the count is less than max_num_ants
+        if self.generated_ants_count < self.max_num_ants:
+            # Create a new ant instance
+            ant_id = self.generated_ants_count + 1  # Assign an ID to the ant
+            new_ant = Ant(ant_id, source_node, sink_node, pheromone_matrix)
+            
+            # Add the ant to the list of ants at this node
+            self.ants.append(new_ant)
+            
+            # Increment the count of generated ants
+            self.generated_ants_count += 1
+            
+            print(f"Ant {new_ant.ant_id} generated at Node {self.node_id}.")
+        else:
+            print(f"Node {self.node_id} has reached the max number of ants.")
+
+
 
 # Ant Class
 class Ant:
-    def __init__(self, ant_id, source_node, sink_node):
+    def __init__(self, ant_id, source_node, sink_node, pheromone_matrix):
         self.ant_id = ant_id                        # Unique ID of the ant
         self.source_node = source_node              # Source node of the ant
         self.sink_node = sink_node                  # Destination node (sink)
         self.visited_nodes = [source_node]          # List of nodes visited, starting from the source
         self.current_position = source_node         # Current position (initially at source)
         self.distance_traveled = 0.0                # Total distance traveled
-        self.is_back_ant = False                    # Indicates if the ant is retracing its path
+        self.curr_back_index=-1                     # Used in back ant how much path retraced
+        self.is_back_ant = False                    # Indicates if the ant is retracing its path (True if retracing)
+        self.pheromone_matrix = [row[:] for row in pheromone_matrix]  # Copy of the source node's pheromone matrix
+
 
     # Function to move the ant to the next hop
     def move_ant(self, nodes, alpha=1.0, beta=2.0, m=0.5, rho=0.1, Q=1.0, tau_min=0.1, tau_max=5.0):
         if self.is_back_ant:
-            if len(self.visited_nodes) > 1:
-                next_hop = self.visited_nodes[-2]  # Move to the previous node in retraced path
-                self.visited_nodes.pop()           # Remove the current node from the visited list
-
-                # Update pheromones: Evaporate for neighbors and update for the retraced path
-                update_pheromone_backtracking(self.current_position, next_hop, nodes, self, rho, Q, tau_min, tau_max)
-
+            # Moving backward by using the index and updating the distance list
+            if self.curr_back_index > 0:  # Ensure there's still a path to backtrack            
+                # Update distance traveled by the distance between current and previous node
+                prev_node = self.visited_nodes[self.curr_back_index - 1]
+                curr_node = self.visited_nodes[self.curr_back_index]
+                self.distance_traveled += euclidean_distance(nodes[curr_node], nodes[prev_node])
+                
+                # Move to the previous node in the visited path
+                self.curr_back_index -= 1
+                self.current_position = self.visited_nodes[self.curr_back_index]
+                
+                print(f"Back Ant {self.ant_id} moved to node {self.current_position}, total distance: {self.distance_traveled}")
+            
             else:
-                print(f"Ant {self.ant_id} has reached the source while retracing.")
-                return
+                # If current back index is 0, it means we've reached the source node
+                print(f"Ant {self.ant_id} has reached the source node while retracing.")
+                store_ant(self, nodes[self.source_node])  # Store ant at the source node
+                return  # Ant has finished its journey back to the source
+            
+            #If all ants reach the source node then update pheromone and remove ants
+            if len(nodes[self.source_node].ants) == nodes[self.source_node].max_num_ants:
+                # Evaporate pheromones and add pheromone from ants
+                evaporate_pheromones(self.source_node, nodes)
+                add_pheromone_from_ants(nodes[self.source_node], Q=1.0)
+
+                # Initialize ants for the next round
+                nodes[self.source_node].initialize_k_ants()
+
         else:
             # Calculate next hop using probabilities during forward movement
             current_node = nodes[self.current_position]
@@ -61,39 +120,84 @@ class Ant:
 
     def start_backtracking(self):
         self.is_back_ant = True
+        self.curr_back_index=len(self.visited_nodes)-1
         print(f"Ant {self.ant_id} is now retracing its path back to the source.")
 
 
-# Function to evaporate pheromones for all neighbors of a node, excluding visited nodes
-def evaporate_pheromones(current_node_id, next_node_id, nodes, visited_nodes, rho=0.1, tau_min=0.1):
+def store_ant(ant, source_node):
     """
-    Evaporates pheromone levels for all neighbors of the current node, except those that
-    are already visited or part of the ant's retraced path.
+    Stores the ant in the source node after it completes its journey back.
+    """
+    source_node.ants.append(ant)
+    print(f"Ant {ant.ant_id} has been stored at the source node {source_node.node_id}.")
 
-    :param current_node_id: ID of the current node.
-    :param next_node_id: ID of the next node the ant will visit in its retraced path.
-    :param nodes: List of all nodes in the network.
-    :param visited_nodes: List of nodes that the ant has already visited.
+
+# Function to evaporate pheromones for all neighbors of a node, excluding visited nodes
+def evaporate_pheromones(source_node, rho=0.1, tau_min=0.1):
+    """
+    Evaporates pheromone levels for all the pheromone matrix entries stored in the source node.
+    The evaporation applies to all entries by multiplying them with (1 - rho) and ensures 
+    pheromone values do not fall below tau_min.
+
+    :param source_node: The node that stores the pheromone matrix (source node).
     :param rho: Evaporation rate.
     :param tau_min: Minimum pheromone level.
     """
-    current_node = nodes[current_node_id]
+    n = len(source_node.pheromone_matrix)  # Assuming pheromone matrix is n x n in size
 
-    for neighbor_id in current_node.neighbors:
-        # Evaporate for all neighbors except those in the visited list
-        if neighbor_id != next_node_id and neighbor_id not in visited_nodes:
-            tau_ij = current_node.pheromone_matrix[current_node_id][neighbor_id]
-            new_tau_ij = (1 - rho) * tau_ij  # Evaporate pheromone
+    # Iterate over the entire pheromone matrix
+    for i in range(n):
+        for j in range(n):
+            # Evaporate pheromone value
+            tau_ij = source_node.pheromone_matrix[i][j]
+            new_tau_ij = (1 - rho) * tau_ij  # Apply evaporation
 
             # Ensure the pheromone doesn't fall below tau_min
             if new_tau_ij < tau_min:
                 new_tau_ij = tau_min
 
-            # Update the pheromone value for both nodes (symmetric link)
-            current_node.pheromone_matrix[current_node_id][neighbor_id] = new_tau_ij
-            nodes[neighbor_id].pheromone_matrix[neighbor_id][current_node_id] = new_tau_ij
+            # Update the pheromone value in the matrix
+            source_node.pheromone_matrix[i][j] = new_tau_ij
 
-            print(f"Pheromone evaporated between Node {current_node_id} and Neighbor {neighbor_id}: {tau_ij} -> {new_tau_ij}")
+            # Print updated pheromone information for debugging
+            print(f"Pheromone evaporated between Node {i} and Node {j}: {tau_ij} -> {new_tau_ij}")
+
+def add_pheromone_from_ants(source_node, Q=1.0, tau_max=5.0):
+    """
+    Adds pheromones to the source node's pheromone matrix based on the paths taken by the ants.
+    For each ant, the function iterates through its visited nodes and adds Q / Lk to the pheromone
+    levels between consecutive nodes in the path, ensuring the pheromone level does not exceed tau_max.
+
+    :param source_node: The node that stores the pheromone matrix (source node).
+    :param Q: Constant value used to calculate the pheromone contribution (default is 1.0).
+    :param tau_max: Maximum allowed pheromone level (upper bound).
+    """
+    ants = source_node.ants
+    for ant in ants:
+        # Ensure the ant has a valid path and has completed its journey
+        if len(ant.visited_nodes) < 2 or ant.distance_traveled <= 0:
+            continue  # Skip ants that don't have a valid path or didn't travel
+
+        # Calculate the pheromone contribution for this ant
+        pheromone_contribution = Q / ant.distance_traveled
+
+        # Update pheromones for each edge in the visited path
+        for i in range(len(ant.visited_nodes) - 1):
+            node_i = ant.visited_nodes[i]
+            node_j = ant.visited_nodes[i + 1]
+
+            # Add the pheromone contribution to both directions (i->j and j->i)
+            source_node.pheromone_matrix[node_i][node_j] += pheromone_contribution
+            source_node.pheromone_matrix[node_j][node_i] += pheromone_contribution
+
+            # Apply the upper bound (tau_max) to ensure pheromone levels don't exceed tau_max
+            if source_node.pheromone_matrix[node_i][node_j] > tau_max:
+                source_node.pheromone_matrix[node_i][node_j] = tau_max
+            if source_node.pheromone_matrix[node_j][node_i] > tau_max:
+                source_node.pheromone_matrix[node_j][node_i] = tau_max
+
+            # Print debug information for the pheromone update
+            print(f"Pheromone added between Node {node_i} and Node {node_j}: +{pheromone_contribution}, capped at {tau_max} if exceeded.")
 
 
 # Function to update pheromone levels between two nodes using the given equation
@@ -144,25 +248,33 @@ def euclidean_distance(node1, node2):
 
 
 # Function to generate n nodes randomly in a 10x10 area and set neighbors based on distance
-def generate_nodes(n, energy, r, side_length=10):
+def initialize_nodes(n, side_length, r, initial_energy):
+    """
+    Initializes the nodes with unique random locations within a square of side_length x side_length,
+    ensuring no two nodes are at the same position.
+    """
     nodes = []
-    
-    # Generate nodes with random positions and the same energy level
-    for i in range(n):
-        x, y = random.uniform(0, side_length), random.uniform(0, side_length)  # Random location within the grid
-        node = Node(i, x, y, energy, n)
-        nodes.append(node)
-    
-    # Set neighbors based on distance less than 'r'
+    positions = set()
+
+    while len(nodes) < n - 1:  # Leave one position for sink node
+        x, y = round(random.uniform(0, side_length), 2), round(random.uniform(0, side_length), 2)
+        if (x, y) not in positions:
+            positions.add((x, y))
+            new_node = Node(id=len(nodes), x=x, y=y, energy=initial_energy)
+            nodes.append(new_node)
+
+    # Adding the sink node at position (10, 10)
+    sink_node = Node(id=n - 1, x=10, y=10, energy=initial_energy)  # Infinite energy for sink
+    nodes.append(sink_node)
+
+    # Now calculate neighbors based on communication radius r
     for node in nodes:
         for other_node in nodes:
-            if node.node_id != other_node.node_id:
-                distance = euclidean_distance(node, other_node)
+            if node.id != other_node.id:
+                distance = math.sqrt((node.x - other_node.x) ** 2 + (node.y - other_node.y) ** 2)
                 if distance <= r:
-                    pheromone_level = random.uniform(0.1, 1.0)  # Random initial pheromone level
-                    loss_percent = random.uniform(0.1, 0.5)     # Random packet loss percentage
-                    node.add_neighbor(other_node.node_id, pheromone_level, loss_percent)
-    
+                    node.neighbors.append(other_node.id)
+
     return nodes
 
 
