@@ -6,7 +6,6 @@ import math
 import copy
 import matplotlib.animation as animation
 
-
 all_nodes = []
 all_paths = []
 
@@ -95,8 +94,6 @@ class Node:
             # Calculate average distance for the current location
             avg_distance = total_distance / count if count > 0 else 0
             self.cluster_d_avg.append(avg_distance)
-       
-
 
 # Ant Class
 class Ant:
@@ -162,15 +159,6 @@ class Ant:
         self.is_back_ant = True
         self.curr_back_index=len(self.visited_nodes)-1
         #print(f"Ant {self.ant_id} is now retracing its path back to the source.")
-
-
-# def store_ant(ant, source_node):
-#     """
-#     Stores the ant in the source node after it completes its journey back.
-#     """
-#     source_node.ants.append(ant)
-#     #print(f"Ant {ant.ant_id} has been stored at the source node {source_node.node_id}.")
-
 
 # Function to evaporate pheromones for all neighbors of a node, excluding visited nodes
 def evaporate_pheromones(source_node, rho, tau_min):
@@ -241,11 +229,10 @@ def add_pheromone_from_ants(source_node, sink_node, tau_max):
             if source_node.pheromone_matrix[node_j][node_i] > tau_max:
                 source_node.pheromone_matrix[node_j][node_i] = tau_max
 
- 
-# Function to calculate Euclidean distance between two nodes
+ # Function to calculate Euclidean distance between two nodes
+
 def euclidean_distance(node1, node2):
     return math.sqrt((node1.location[0] - node2.location[0]) ** 2 + (node1.location[1] - node2.location[1]) ** 2)
-
 
 # Function to generate n nodes randomly in a 10x10 area and set neighbors based on distance
 def initialize_nodes(n, side_length, r_min, r_max, initial_energy, max_num_ants, initial_pheromone, cluster_size=5):
@@ -300,11 +287,9 @@ def initialize_nodes(n, side_length, r_min, r_max, initial_energy, max_num_ants,
 
     return nodes
 
-
 # Function to initialize ants with a given source node and sink node
 def initialize_ants(source_node_id, nodes, sink_node_id):
     nodes[source_node_id].generate_ant(source_node_id,sink_node_id,nodes[source_node_id].pheromone_matrix)
-
 
 # Function to calculate the eta value for a given neighbor
 def get_eta(current_node, neighbor_node, source_node, sink_node, m):
@@ -331,7 +316,6 @@ def get_eta(current_node, neighbor_node, source_node, sink_node, m):
     eta = 5*(dist_source_sink / (m * dist_i_j + (1 - m) * dist_j_sink)) * (energy_ratio) * ((neighbor_node.num_neighbors / max_neighbors)**0.5)
     #print(eta, "hehee")
     return eta
-
 
 # Function to calculate the probability list for choosing the next hop
 def get_next_hop_probabilities(node, ant, nodes, alpha, beta, m):
@@ -386,7 +370,6 @@ def get_next_hop_probabilities(node, ant, nodes, alpha, beta, m):
     #print("maurya")
     return probabilities
 
-
 # Function to select the next hop based on the probability distribution and return the next node ID
 def choose_next_hop(probability_list):
     """
@@ -404,7 +387,6 @@ def choose_next_hop(probability_list):
     chosen_index = random.choices(range(len(neighbors)), weights=probabilities, k=1)[0]
     
     return neighbors[chosen_index]
-
 
 def establish_route(source_node_id, sink_node_id,  nodes, rho, tau_min, tau_max):
     """
@@ -480,7 +462,6 @@ def generate_data_path(source_node, sink_node_id, nodes):
     # Return the final path when we reach the sink node
     return path
 
-
 def send_data(source_node_id, sink_node_id, nodes, data, Elec, epsilon, rho, tau_min, tau_max):
     """
     Sends a data packet from source to sink. Uses pheromone levels to decide the next hop
@@ -534,7 +515,6 @@ def send_data(source_node_id, sink_node_id, nodes, data, Elec, epsilon, rho, tau
     check_energy_levels(nodes)
 
     return sent_packets, received_packets
-
 
 def move_data(packet, nodes):
     """
@@ -601,7 +581,6 @@ def update_energy(Eelec, epsilon, l, transmiting_node, receiving_node, nodes, rh
     
     return 
 
-
 def check_energy_levels(nodes):
     """
     This function checks the energy levels of the current CH of each node in the cluster.
@@ -625,8 +604,6 @@ def check_energy_levels(nodes):
 
 def find_distance(location1, location2):
     return math.sqrt((location1[0] - location2[0]) ** 2 + (location1[1] - location2[1]) ** 2)
-
-
 
 def select_new_CH(node, sink_node_location):
     """
@@ -663,82 +640,6 @@ def select_new_CH(node, sink_node_location):
         
         # Update the current CH index
         node.curr_CH = new_ch_index
-
-# def plot_graph(nodes, path1, path2=[], show_neighbors=True, show_child=True):
-#     plt.figure(figsize=(6, 6))
-    
-#     # Plot the edges
-#     if show_neighbors:
-#         for node in nodes:
-#             x, y = node.location  # Get the (x, y) coordinates of the current node
-#             for neighbor_id in node.neighbors:
-#                 neighbor = nodes[neighbor_id]  # Get the neighbor node
-#                 x_n, y_n = neighbor.location   # Neighbor's coordinates
-#                 # Plot edge between the node and its neighbor
-#                 plt.plot([x, x_n], [y, y_n], color='black', linestyle='-', linewidth=1)
-
-#     if show_child:
-#         for node in nodes:
-#             x,y=node.location
-#             for child in node.cluster_locations:
-#                 x_n, y_n = child   # Child's coordinates
-#                 # Plot edge between the node and its neighbor
-#                 plt.plot([x, x_n], [y, y_n], color='pink', linestyle='-', linewidth=1)
-        
-#         for node in nodes:
-#             for child in node.cluster_locations:
-#                 x, y = child   # Child's coordinates
-#                 plt.scatter(x, y, color='purple', s=50)  # Red for all other nodes
-
-        
-
-
-#     # Plot the nodes
-#     for i, node in enumerate(nodes):
-#         x, y = node.location
-#         if i == 0:  # Source node
-#             plt.scatter(x, y, color='blue', s=100, label='Source' if i == 0 else "")  # Blue for source
-#         elif i == 1:  # Sink node
-#             plt.scatter(x, y, color='green', s=100, label='Sink' if i == 1 else "")  # Green for sink
-#         else:
-#             plt.scatter(x, y, color='red', s=100)  # Red for all other nodes
-#         # Add labels to the nodes (node_id)
-#         plt.text(x , y, f'{node.node_id}', fontsize=12)
-
-#     # Plot the path in green
-#     for k in range(len(path1) - 1):
-#         node1 = nodes[path1[k]]     # Current node
-#         node2 = nodes[path1[k + 1]] # Next node in the path
-#         x1, y1 = node1.location
-#         x2, y2 = node2.location
-#         # Plot a green edge between adjacent nodes in the path
-#         plt.plot([x1, x2], [y1, y2], color='green', linestyle='-', linewidth=2)
-
-#      # Plot the path in green
-#     for k in range(len(path2) - 1):
-#         node1 = nodes[path2[k]]     # Current node
-#         node2 = nodes[path2[k + 1]] # Next node in the path
-#         x1, y1 = node1.location
-#         x2, y2 = node2.location
-#         # Plot a green edge between adjacent nodes in the path
-#         plt.plot([x1, x2], [y1, y2], color='red', linestyle='-', linewidth=2)
-
-#     # Set plot labels and title
-#     plt.xlabel("X")
-#     plt.ylabel("Y")
-#     plt.title("Graph of Nodes and Edges")
-
-#     # Show the legend for source and sink
-#     plt.legend()
-
-#     # Display grid
-#     plt.grid(True)
-
-#     # Show the plot for 0.5 seconds and then close
-#     plt.show()
-#     # plt.pause(0.5)
-#     # plt.close()
-
 
 def plot_graph(all_nodes, all_paths, show_neighbors=True, show_child=True, interval=5):
     fig, ax = plt.subplots(figsize=(6, 6))
@@ -813,8 +714,6 @@ def plot_graph(all_nodes, all_paths, show_neighbors=True, show_child=True, inter
 
     # Show the animation
     plt.show()
-
-
 
 def remove_node(nodes, x, rho, tau_min, tau_max):
     nodes[x].energy=0

@@ -23,3 +23,81 @@ class Ant:
         self.curr_back_index=-1                     # Used in back ant how much path retraced
         self.is_back_ant = False                    # Indicates if the ant is retracing its path (True if retracing)
         self.pheromone_matrix = [row[:] for row in pheromone_matrix]  # Copy of the source node's pheromone matrix
+
+
+
+
+# def plot_graph(nodes, path1, path2=[], show_neighbors=True, show_child=True):
+#     plt.figure(figsize=(6, 6))
+    
+#     # Plot the edges
+#     if show_neighbors:
+#         for node in nodes:
+#             x, y = node.location  # Get the (x, y) coordinates of the current node
+#             for neighbor_id in node.neighbors:
+#                 neighbor = nodes[neighbor_id]  # Get the neighbor node
+#                 x_n, y_n = neighbor.location   # Neighbor's coordinates
+#                 # Plot edge between the node and its neighbor
+#                 plt.plot([x, x_n], [y, y_n], color='black', linestyle='-', linewidth=1)
+
+#     if show_child:
+#         for node in nodes:
+#             x,y=node.location
+#             for child in node.cluster_locations:
+#                 x_n, y_n = child   # Child's coordinates
+#                 # Plot edge between the node and its neighbor
+#                 plt.plot([x, x_n], [y, y_n], color='pink', linestyle='-', linewidth=1)
+        
+#         for node in nodes:
+#             for child in node.cluster_locations:
+#                 x, y = child   # Child's coordinates
+#                 plt.scatter(x, y, color='purple', s=50)  # Red for all other nodes
+
+        
+
+
+#     # Plot the nodes
+#     for i, node in enumerate(nodes):
+#         x, y = node.location
+#         if i == 0:  # Source node
+#             plt.scatter(x, y, color='blue', s=100, label='Source' if i == 0 else "")  # Blue for source
+#         elif i == 1:  # Sink node
+#             plt.scatter(x, y, color='green', s=100, label='Sink' if i == 1 else "")  # Green for sink
+#         else:
+#             plt.scatter(x, y, color='red', s=100)  # Red for all other nodes
+#         # Add labels to the nodes (node_id)
+#         plt.text(x , y, f'{node.node_id}', fontsize=12)
+
+#     # Plot the path in green
+#     for k in range(len(path1) - 1):
+#         node1 = nodes[path1[k]]     # Current node
+#         node2 = nodes[path1[k + 1]] # Next node in the path
+#         x1, y1 = node1.location
+#         x2, y2 = node2.location
+#         # Plot a green edge between adjacent nodes in the path
+#         plt.plot([x1, x2], [y1, y2], color='green', linestyle='-', linewidth=2)
+
+#      # Plot the path in green
+#     for k in range(len(path2) - 1):
+#         node1 = nodes[path2[k]]     # Current node
+#         node2 = nodes[path2[k + 1]] # Next node in the path
+#         x1, y1 = node1.location
+#         x2, y2 = node2.location
+#         # Plot a green edge between adjacent nodes in the path
+#         plt.plot([x1, x2], [y1, y2], color='red', linestyle='-', linewidth=2)
+
+#     # Set plot labels and title
+#     plt.xlabel("X")
+#     plt.ylabel("Y")
+#     plt.title("Graph of Nodes and Edges")
+
+#     # Show the legend for source and sink
+#     plt.legend()
+
+#     # Display grid
+#     plt.grid(True)
+
+#     # Show the plot for 0.5 seconds and then close
+#     plt.show()
+#     # plt.pause(0.5)
+#     # plt.close()
