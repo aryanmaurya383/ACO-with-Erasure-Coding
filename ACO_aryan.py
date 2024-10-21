@@ -6,13 +6,13 @@ import math
 
 # Node Class
 class Node:
-    def __init__(self, node_id, x, y, energy, n, max_num_ants):
+    def __init__(self, node_id, x, y, energy, initial_pheromone, n, max_num_ants):
         self.node_id = node_id                      # ID of the node
         self.location = (x,y)                       # (x,y) location of the node
         self.energy = energy                        # Energy of the node
         self.neighbors = []                         # List of neighbors (node ids)
         self.num_neighbors = 0                      # Number of neighbors
-        self.pheromone_matrix = np.full((n, n), 5.0)    # Pheromone matrix (n x n)
+        self.pheromone_matrix = np.full((n, n), initial_pheromone)    # Pheromone matrix (n x n)
         self.loss_matrix = np.zeros((n, n))         # Loss percentage matrix (n x n)
         self.max_num_ants = max_num_ants            # Max number of ants to be produced
         self.generated_ants_count = 0               # Number of ants generated
@@ -75,7 +75,7 @@ class Ant:
 
 
     # Function to move the ant to the next hop
-    def move_ant(self, nodes, alpha=1.0, beta=2.0, m=0.5):
+    def move_ant(self, nodes, alpha=1.0, beta=2.0, m=0.3):
         if self.dropped:
             #ant reached a dead end
             return
@@ -177,7 +177,7 @@ def add_pheromone_from_ants(source_node, sink_node, tau_max):
     ants = source_node.ants
     
     if(len(ants)):
-        Q = 2.5* euclidean_distance(source_node, sink_node)
+        Q = 1.5* euclidean_distance(source_node, sink_node)
 
     for ant in ants:
         # Ensure the ant has a valid path and has completed its journey
@@ -202,59 +202,14 @@ def add_pheromone_from_ants(source_node, sink_node, tau_max):
             if source_node.pheromone_matrix[node_j][node_i] > tau_max:
                 source_node.pheromone_matrix[node_j][node_i] = tau_max
 
-            # #print debug information for the pheromone update
-            #print(f"Pheromone added between Node {node_i} and Node {node_j}: +{pheromone_contribution}, capped at {tau_max} if exceeded.")
-
-
-# # Function to update pheromone levels between two nodes using the given equation
-# # Modified function to update pheromones with evaporation, excluding visited nodes
-# def update_pheromone_backtracking(current_node_id, next_node_id, nodes, ant, rho=0.1, Q=1.0, tau_min=0.1, tau_max=5.0):
-#     """
-#     Updates pheromone levels during backtracking, performing evaporation on all neighboring
-#     links (excluding visited nodes) and updating the pheromone only on the current path.
-
-#     :param current_node_id: ID of the current node.
-#     :param next_node_id: ID of the next node the ant will visit in its retraced path.
-#     :param nodes: List of all nodes in the network.
-#     :param ant: The ant retracing its path.
-#     :param rho: Evaporation rate.
-#     :param Q: Constant used for pheromone increase.
-#     :param tau_min: Minimum pheromone level.
-#     :param tau_max: Maximum pheromone level.
-#     """
-#     current_node = nodes[current_node_id]
-
-#     # Evaporate pheromones on all neighbors except those in the visited path
-#     evaporate_pheromones(current_node_id, next_node_id, nodes, ant.visited_nodes, rho, tau_min)
-
-#     # Now update pheromone for the current path (i.e., the link between current_node and next_node)
-#     tau_ij = current_node.pheromone_matrix[current_node_id][next_node_id]
-#     delta_tau_ij = Q / ant.distance_traveled  # Calculate Δτ_ij(t) = Q / L_k
-
-#     # Apply the pheromone update equation
-#     new_tau_ij = (1 - rho) * tau_ij + delta_tau_ij
-
-#     # Ensure the pheromone level stays within the bounds
-#     if new_tau_ij > tau_max:
-#         new_tau_ij = tau_max
-#     elif new_tau_ij < tau_min:
-#         new_tau_ij = tau_min
-
-#     # Update the pheromone in both directions (symmetric)
-#     current_node.pheromone_matrix[current_node_id][next_node_id] = new_tau_ij
-#     nodes[next_node_id].pheromone_matrix[next_node_id][current_node_id] = new_tau_ij
-
-#     #print(f"Pheromone updated between Node {current_node_id} and Node {next_node_id}: {tau_ij} -> {new_tau_ij}")
-
-
-
+ 
 # Function to calculate Euclidean distance between two nodes
 def euclidean_distance(node1, node2):
     return math.sqrt((node1.location[0] - node2.location[0]) ** 2 + (node1.location[1] - node2.location[1]) ** 2)
 
 
 # Function to generate n nodes randomly in a 10x10 area and set neighbors based on distance
-def initialize_nodes(n, side_length, r_min, r_max, initial_energy, max_num_ants):
+def initialize_nodes(n, side_length, r_min, r_max, initial_energy, max_num_ants, initial_pheromone):
     """
     Initializes the nodes with unique random locations within a square of side_length x side_length,
     ensuring no two nodes are at the same position, no neighbors are within r_min radius, 
@@ -264,12 +219,12 @@ def initialize_nodes(n, side_length, r_min, r_max, initial_energy, max_num_ants)
     positions = set()
 
     # Adding the source node at position (0, 0)
-    source_node = Node(node_id=0, x=0, y=0, energy=initial_energy, n=n, max_num_ants=max_num_ants)  # Infinite energy for source
+    source_node = Node(node_id=0, x=0, y=0, energy=initial_energy, initial_pheromone=initial_pheromone, n=n, max_num_ants=max_num_ants)  # Infinite energy for source
     positions.add((0, 0))
     nodes.append(source_node)
 
     # Adding the sink node at position (side_length, side_length)
-    sink_node = Node(node_id=1, x=side_length, y=side_length, energy=initial_energy, n=n, max_num_ants=max_num_ants)  # Infinite energy for sink
+    sink_node = Node(node_id=1, x=side_length, y=side_length, energy=initial_energy,  initial_pheromone=initial_pheromone, n=n, max_num_ants=max_num_ants)  # Infinite energy for sink
     positions.add((side_length, side_length))
     nodes.append(sink_node)
 
@@ -285,7 +240,7 @@ def initialize_nodes(n, side_length, r_min, r_max, initial_energy, max_num_ants)
                     break
             if valid_position:
                 positions.add((x, y))
-                new_node = Node(node_id=len(nodes), x=x, y=y, energy=initial_energy, n=n, max_num_ants=max_num_ants)
+                new_node = Node(node_id=len(nodes), x=x, y=y, energy=initial_energy,  initial_pheromone=initial_pheromone, n=n, max_num_ants=max_num_ants)
                 nodes.append(new_node)
 
     # Now calculate neighbors based on communication radius r_max and ensure no neighbors within r_min
@@ -310,7 +265,7 @@ def initialize_ants(source_node_id, nodes, sink_node_id):
 
 
 # Function to calculate the eta value for a given neighbor
-def get_eta(current_node, neighbor_node, source_node, sink_node, m=0.5):
+def get_eta(current_node, neighbor_node, source_node, sink_node, m):
     """
     Calculate the eta value for a neighbor.
     
@@ -325,10 +280,13 @@ def get_eta(current_node, neighbor_node, source_node, sink_node, m=0.5):
     dist_i_j = euclidean_distance(current_node, neighbor_node)
     dist_j_sink = euclidean_distance(neighbor_node, sink_node)
     
-    energy_ratio = neighbor_node.energy / current_node.energy
+    energy_ratio=0
+
+    if(current_node.energy!=0):
+        energy_ratio = neighbor_node.energy / current_node.energy
     max_neighbors = max([node.num_neighbors for node in nodes])  # Max neighbors across all nodes
     
-    eta = 4*(dist_source_sink / (m * dist_i_j + (1 - m) * dist_j_sink)) * (energy_ratio) * (neighbor_node.num_neighbors / max_neighbors)
+    eta = 5*(dist_source_sink / (m * dist_i_j + (1 - m) * dist_j_sink)) * (energy_ratio) * ((neighbor_node.num_neighbors / max_neighbors)**0.5)
     #print(eta, "hehee")
     return eta
 
@@ -480,7 +438,7 @@ def generate_data_path(source_node, sink_node_id, nodes):
     # Return the final path when we reach the sink node
     return path
 
-def send_data(source_node_id, sink_node_id, nodes, data):
+def send_data(source_node_id, sink_node_id, nodes, data, Elec, epsilon, rho, tau_min, tau_max):
     """
     Sends a data packet from source to sink. Uses pheromone levels to decide the next hop
     while considering the packet loss ratio from the loss matrix of the current node.
@@ -489,12 +447,14 @@ def send_data(source_node_id, sink_node_id, nodes, data):
     :param sink_node_id: ID of the sink node
     :param nodes: List of all nodes in the network
     :param data: The data to be sent in the packet
+    :param Elec: Transmission energy
+    :param epsilon: Amplification energy
     """
     sent_packets = []
     received_packets = []
     
     # Initialize the data packet with source, sink, current position, path, and the data field.
-    optimal_path=generate_data_path(source_node, sink_node_id)
+    optimal_path=generate_data_path(source_node, sink_node_id, nodes)
     optimal_path.reverse()
     packet = {
         'source': source_node_id,
@@ -502,8 +462,10 @@ def send_data(source_node_id, sink_node_id, nodes, data):
         'current_position': source_node_id,
         'path': optimal_path,
         'data': data,
-        'lost': False
+        'lost': False,
+        'size': 800
     }
+    packet['path'].pop()
     sent_packets.append(packet)
     #print(f"Data packet sent from Source Node {source_node_id} to Sink Node {sink_node_id} with data: {data}")
 
@@ -514,6 +476,10 @@ def send_data(source_node_id, sink_node_id, nodes, data):
             packet['lost'] = True
             #print(f"Packet dropped while moving from Node {packet['current_position']}.")
             return sent_packets, received_packets
+
+        #Update Energy values
+        # print("Curr: ", packet['current_position'], " next: ", next_hop)
+        update_energy(Elec, epsilon, packet['size'], nodes[packet['current_position']], nodes[next_hop], nodes, rho, tau_min, tau_max)
 
         # Update the packet's path and current position
         packet['path'].pop()
@@ -551,10 +517,49 @@ def move_data(packet, nodes):
         #print(f"Packet lost due to high loss ratio from Node {packet['current_position']}.")
         return None  # Packet dropped due to loss
 
+def update_energy(Eelec, epsilon, l, transmiting_node, receiving_node, nodes, rho, tau_min, tau_max):
+    """
+    Calculate the total energy consumption for wireless communication.
+    
+    Parameters:
+    Eelec (float): Energy consumption per bit (in Joules per bit).
+    epsilon (float): Path loss factor (in Joules per bit per meter^4).
+    l (int): Number of bits of data being transmitted.
+    
+    Returns:
+    float: Total energy consumption in Joules.
+    """
 
+    d = euclidean_distance(transmiting_node,receiving_node)/500
 
-def plot_graph(nodes, path, show_neighbors=True):
+    # Energy due to transmission of l bits
+    energy_transmission = Eelec * l
+    
+    # Energy due to multipath fading (d^4 term)
+    energy_fading = epsilon * l * (d ** 4)
+    
+    # Total energy
+    total_energy = energy_transmission + energy_fading
+    # print("In Energy Curr: ", transmiting_node.node_id, " next: ", receiving_node.node_id)
+
+    if receiving_node.node_id > 1 :
+        receiving_node.energy-=energy_transmission
+    if transmiting_node.node_id > 1:
+        transmiting_node.energy-=total_energy
+
+    if(receiving_node.energy<=0):
+        remove_node(nodes, receiving_node.node_id, rho, tau_min, tau_max)
+        
+
+    if(transmiting_node.energy<=0):
+        remove_node(nodes, transmiting_node.node_id, rho, tau_min, tau_max)
+
+    
+    return 
+
+def plot_graph(nodes, path1, path2=[], show_neighbors=True):
     plt.figure(figsize=(6, 6))
+    
     # Plot the edges
     if show_neighbors:
         for node in nodes:
@@ -577,13 +582,23 @@ def plot_graph(nodes, path, show_neighbors=True):
         # Add labels to the nodes (node_id)
         plt.text(x , y, f'{node.node_id}', fontsize=12)
 
-    for k in range(len(path) - 1):
-        node1 = nodes[path[k]]     # Current node
-        node2 = nodes[path[k + 1]] # Next node in the path
+    # Plot the path in green
+    for k in range(len(path1) - 1):
+        node1 = nodes[path1[k]]     # Current node
+        node2 = nodes[path1[k + 1]] # Next node in the path
         x1, y1 = node1.location
         x2, y2 = node2.location
         # Plot a green edge between adjacent nodes in the path
         plt.plot([x1, x2], [y1, y2], color='green', linestyle='-', linewidth=2)
+
+     # Plot the path in green
+    for k in range(len(path2) - 1):
+        node1 = nodes[path2[k]]     # Current node
+        node2 = nodes[path2[k + 1]] # Next node in the path
+        x1, y1 = node1.location
+        x2, y2 = node2.location
+        # Plot a green edge between adjacent nodes in the path
+        plt.plot([x1, x2], [y1, y2], color='red', linestyle='-', linewidth=2)
 
     # Set plot labels and title
     plt.xlabel("X")
@@ -593,36 +608,51 @@ def plot_graph(nodes, path, show_neighbors=True):
     # Show the legend for source and sink
     plt.legend()
 
-    # Show the plot
+    # Display grid
     plt.grid(True)
-    plt.show()
 
-def remove_node(nodes, x):
+    # Show the plot for 0.5 seconds and then close
+    plt.show()
+    # plt.pause(0.5)
+    # plt.close()
+
+
+def remove_node(nodes, x, rho, tau_min, tau_max):
     nodes[x].energy=0
     for neighbor in nodes[x].neighbors:
-        nodes[0].pheromone_matrix[neighbor][x]=1
-        nodes[0].pheromone_matrix[x][neighbor]=1
+        nodes[0].pheromone_matrix[neighbor][x]=0
+        nodes[0].pheromone_matrix[x][neighbor]=0
+    for i in range(5):
+        establish_route(0, 1, nodes, rho, tau_min, tau_max)
+    
+    print("New path: ", generate_data_path(nodes[0],1,nodes))
 
 def priint(matrix):
     print("Pheromone Matrix:")
     for row in matrix:
         print([f"{value:.2f}" for value in row])
 
-
+def priint_energies(nodes):
+    for node in nodes:
+        print(node.node_id, node.energy)
+        
 # Example of setting up the network, initializing ants, and moving ants
 n = 20              # Number of nodes
-side_length = 1    # Side length of square area of network
-energy = 1.0        # Same energy level for all nodes
-r_min = 0.2            # Neighbor node range
-r_max = 0.5            # Neighbor node range
-num_ants = 10        # Number of ants
+side_length = 500    # Side length of square area of network
+energy = 120        # Same energy level for all nodes
+r_min = 100            # Neighbor node range
+r_max = 250            # Neighbor node range
+num_ants = 50        # Number of ants
+initial_pheromone=10.0
 rho = 0.1
-tau_max = 15
-tau_min = 1
+tau_max = 40
+tau_min = 2
+Elec = 10**(-5)
+epsilon = 10**(-6)
 
 
 # Generate nodes
-nodes = initialize_nodes(n,side_length, r_min, r_max,energy, num_ants)
+nodes = initialize_nodes(n,side_length, r_min, r_max,energy, num_ants, initial_pheromone)
 source_node=nodes[0]
 sink_node=nodes[1]
 path=[]
@@ -631,7 +661,23 @@ plot_graph(nodes, path)
 
 for i in range(5):
     establish_route(source_node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max)
-    priint(source_node.pheromone_matrix)
+    # priint(source_node.pheromone_matrix)
     path=generate_data_path(source_node, sink_node.node_id,nodes)
     #print(path)
-    plot_graph(nodes, path, False)
+    plot_graph(nodes, path, show_neighbors=False)
+print("Original Path: ", path)
+for i in range (19000):
+    send_data(0,1,nodes,"",Elec,epsilon, rho, tau_min, tau_max)
+
+priint_energies(nodes)
+path1=path
+for i in range(5):
+    establish_route(source_node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max)
+    # priint(source_node.pheromone_matrix)
+    path=generate_data_path(source_node, sink_node.node_id,nodes)
+    #print(path)
+    plot_graph(nodes, path, show_neighbors= False)
+
+plot_graph(nodes, path1, path, False)
+
+# priint_energies(nodes)
