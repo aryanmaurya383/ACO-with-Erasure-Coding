@@ -1,1 +1,0 @@
-{"name":"Local: temp","url":"d:\\Academics\\IITK Sem 7\\CS667\\Project\\temp.cpp","tests":[{"id":1730290771958,"input":"4 4\n0 0\n2 3\n1 1\nS-#K\n-#--\n#K#E\n----","output":""}],"interactive":false,"memoryLimit":1024,"timeLimit":3000,"srcPath":"d:\\Academics\\IITK Sem 7\\CS667\\Project\\temp.cpp","group":"local","local":true}
