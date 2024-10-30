@@ -151,9 +151,9 @@ class Ant:
                 self.start_backtracking()
                 #print(f"Ant {self.ant_id} reached the Sink Node {self.sink_node_id}. Backtracking started.")
 
-        current_node = nodes[self.current_position]
-        self.distance_traveled += euclidean_distance(current_node, nodes[next_hop])
-        self.current_position = next_hop
+            current_node = nodes[self.current_position]
+            self.distance_traveled += euclidean_distance(current_node, nodes[next_hop])
+            self.current_position = next_hop
 
     def start_backtracking(self):
         self.is_back_ant = True
@@ -476,9 +476,10 @@ def send_data(source_node_id, sink_node_id, nodes, data, Elec, epsilon, rho, tau
     """
     sent_packets = []
     received_packets = []
-    
     # Initialize the data packet with source, sink, current position, path, and the data field.
-    optimal_path=generate_data_path(source_node, sink_node_id, nodes)
+    optimal_path=generate_data_path(nodes[source_node_id], sink_node_id, nodes)
+    temp_path =copy.deepcopy(optimal_path)
+    # print(temp_path)
     optimal_path.reverse()
     packet = {
         'source': source_node_id,
@@ -487,7 +488,7 @@ def send_data(source_node_id, sink_node_id, nodes, data, Elec, epsilon, rho, tau
         'path': optimal_path,
         'data': data,
         'lost': False,
-        'size': 800
+        'size': 4000
     }
     packet['path'].pop()
     sent_packets.append(packet)
@@ -495,14 +496,17 @@ def send_data(source_node_id, sink_node_id, nodes, data, Elec, epsilon, rho, tau
 
     # Move the packet through the network
     while packet['current_position'] != sink_node_id:
+        if len(packet['path']) == 0:
+            # nodes[packet['current_position']].energy=0
+            break
         next_hop = move_data(packet, nodes)
+
         if next_hop is None:  # Packet dropped due to loss
             packet['lost'] = True
             #print(f"Packet dropped while moving from Node {packet['current_position']}.")
-            return sent_packets, received_packets
+            return sent_packets, temp_path
 
         #Update Energy values
-        # print("Curr: ", packet['current_position'], " next: ", next_hop)
         update_energy(Elec, epsilon, packet['size'], nodes[packet['current_position']], nodes[next_hop], nodes, rho, tau_min, tau_max)
 
         # Update the packet's path and current position
@@ -514,7 +518,7 @@ def send_data(source_node_id, sink_node_id, nodes, data, Elec, epsilon, rho, tau
     received_packets.append(packet)
     check_energy_levels(nodes)
 
-    return sent_packets, received_packets
+    return sent_packets, temp_path
 
 def move_data(packet, nodes):
     """
@@ -554,7 +558,7 @@ def update_energy(Eelec, epsilon, l, transmiting_node, receiving_node, nodes, rh
     float: Total energy consumption in Joules.
     """
 
-    d = euclidean_distance(transmiting_node,receiving_node)/500
+    d = euclidean_distance(transmiting_node,receiving_node)
 
     # Energy due to transmission of l bits
     energy_transmission = Eelec * l
@@ -566,17 +570,21 @@ def update_energy(Eelec, epsilon, l, transmiting_node, receiving_node, nodes, rh
     total_energy = energy_transmission + energy_fading
     # print("In Energy Curr: ", transmiting_node.node_id, " next: ", receiving_node.node_id)
 
-    if receiving_node.node_id > 1 :
+    if receiving_node.node_id != 1 :
         receiving_node.energy-=energy_transmission
-    if transmiting_node.node_id > 1:
-        transmiting_node.energy-=total_energy
+    # if transmiting_node.node_id > 1:
+    transmiting_node.energy-=total_energy
 
     if(receiving_node.energy<=0):
-        remove_node(nodes, receiving_node.node_id, rho, tau_min, tau_max)
+        receiving_node.energy=0
+        select_new_CH(receiving_node, nodes[1].location)
+        # remove_node(nodes, receiving_node.node_id, rho, tau_min, tau_max)
         
 
     if(transmiting_node.energy<=0):
-        remove_node(nodes, transmiting_node.node_id, rho, tau_min, tau_max)
+        transmiting_node.energy=0
+        select_new_CH(transmiting_node, nodes[1].location)
+        # remove_node(nodes, transmiting_node.node_id, rho, tau_min, tau_max)
 
     
     return 
@@ -597,20 +605,31 @@ def check_energy_levels(nodes):
         if curr_ch_energy < (0.5 * avg_cluster_energy):
             # Select a new CH
             select_new_CH(node, nodes[1].location)
-            path=generate_data_path(source_node, sink_node.node_id,nodes)
-            #print(path)
-            all_paths.append(path)  # Store the current path
+            # path=generate_data_path(source_node, sink_node.node_id,nodes)
+            # #print(path)
+            # all_paths.append(path)  # Store the current path
             all_nodes.append(copy.deepcopy(nodes)) 
+        if avg_cluster_energy == 0:
+            remove_fully_dead_cluster(node, nodes)
 
 def find_distance(location1, location2):
     return math.sqrt((location1[0] - location2[0]) ** 2 + (location1[1] - location2[1]) ** 2)
+
+
+def remove_fully_dead_cluster(dead_node, nodes):
+    dead_node.energy=0
+    for node in nodes:
+        for i in range(len(nodes)):
+            node.pheromone_matrix[i][dead_node.node_id]=0
+            node.pheromone_matrix[dead_node.node_id][i]=0
+
 
 def select_new_CH(node, sink_node_location):
     """
     This function selects a new CH for the node based on the index I.
     The selection is based on residual energy, distance to sink, and average distance to other nodes.
     """
-    max_index = -1
+    max_index = 0
     new_ch_index = -1
     lambda_val = 1  # Assuming lambda is a constant, set it to 1 for now
     
@@ -640,6 +659,11 @@ def select_new_CH(node, sink_node_location):
         
         # Update the current CH index
         node.curr_CH = new_ch_index
+    
+    #All nodes have energy zero
+    else:
+        remove_fully_dead_cluster(node, nodes)
+
 
 def plot_graph(all_nodes, all_paths, show_neighbors=True, show_child=True, interval=5):
     fig, ax = plt.subplots(figsize=(6, 6))
@@ -649,7 +673,7 @@ def plot_graph(all_nodes, all_paths, show_neighbors=True, show_child=True, inter
         ax.clear()  # Clear the previous frame
         if frame < len(all_nodes):
             nodes = all_nodes[frame]  # Get the current state of nodes
-            path1 = all_paths[frame]   # Get the current path
+            # path1 = all_paths[frame]   # Get the current path
         else:
             return
 
@@ -673,9 +697,10 @@ def plot_graph(all_nodes, all_paths, show_neighbors=True, show_child=True, inter
                     ax.plot([x, x_n], [y, y_n], color='pink', linestyle='-', linewidth=1)
             
             for node in nodes:
-                for child in node.cluster_locations:
+                for index, child in enumerate (node.cluster_locations):
                     x, y = child   # Child's coordinates
-                    ax.scatter(x, y, color='purple', s=50)  # Purple for child nodes
+                    plt.scatter(x, y, color='purple', s=50)  # Red for all other nodes
+                    plt.text(x+1 , y+1, f'{node.cluster_energies[index]}', fontsize=8)
 
         # Plot the nodes
         for i, node in enumerate(nodes):
@@ -689,14 +714,14 @@ def plot_graph(all_nodes, all_paths, show_neighbors=True, show_child=True, inter
             # Add labels to the nodes (node_id)
             ax.text(x, y, f'{node.node_id}', fontsize=12)
 
-        # Plot the path1 in green
-        for k in range(len(path1) - 1):
-            node1 = nodes[path1[k]]     # Current node
-            node2 = nodes[path1[k + 1]] # Next node in the path
-            x1, y1 = node1.location
-            x2, y2 = node2.location
-            # Plot a green edge between adjacent nodes in the path
-            ax.plot([x1, x2], [y1, y2], color='green', linestyle='-', linewidth=2)
+        # # Plot the path1 in green
+        # for k in range(len(path1) - 1):
+        #     node1 = nodes[path1[k]]     # Current node
+        #     node2 = nodes[path1[k + 1]] # Next node in the path
+        #     x1, y1 = node1.location
+        #     x2, y2 = node2.location
+        #     # Plot a green edge between adjacent nodes in the path
+        #     ax.plot([x1, x2], [y1, y2], color='green', linestyle='-', linewidth=2)
 
         # Set plot labels and title
         ax.set_xlabel("X")
@@ -715,15 +740,15 @@ def plot_graph(all_nodes, all_paths, show_neighbors=True, show_child=True, inter
     # Show the animation
     plt.show()
 
-def remove_node(nodes, x, rho, tau_min, tau_max):
-    nodes[x].energy=0
-    for neighbor in nodes[x].neighbors:
-        nodes[0].pheromone_matrix[neighbor][x]=0
-        nodes[0].pheromone_matrix[x][neighbor]=0
-    for i in range(5):
-        establish_route(0, 1, nodes, rho, tau_min, tau_max)
+# def remove_node(nodes, x, rho, tau_min, tau_max):
+#     nodes[x].energy=0
+#     for neighbor in nodes[x].neighbors:
+#         nodes[0].pheromone_matrix[neighbor][x]=0
+#         nodes[0].pheromone_matrix[x][neighbor]=0
+#     for i in range(5):
+#         establish_route(0, 1, nodes, rho, tau_min, tau_max)
     
-    print("New path: ", generate_data_path(nodes[0],1,nodes))
+#     # print("New path: ", generate_data_path(nodes[0],1,nodes))
 
 def priint(matrix):
     print("Pheromone Matrix:")
@@ -734,53 +759,212 @@ def priint_energies(nodes):
     for node in nodes:
         print(node.node_id, node.energy)
         
+
+def plot_alive_nodes(data):
+    """
+    Plots the number of alive nodes versus the round number.
+
+    Parameters:
+    data (list of tuples): Each element is a tuple (round_number, alive_nodes).
+    """
+    # Unzip the data into two lists: rounds and alive_nodes
+    rounds, alive_nodes = zip(*data)
+    
+    # Create the plot
+    plt.figure(figsize=(8, 6))
+    plt.plot(rounds, alive_nodes, marker='o', linestyle='-', color='b', label='Alive Nodes')
+    
+    # Add labels and title
+    plt.xlabel('Round Number')
+    plt.ylabel('Number of Alive Nodes')
+    plt.title('Alive Nodes Over Rounds')
+    
+    # Add a grid for better readability
+    plt.grid(True)
+    
+    # Show the legend
+    plt.legend()
+    
+    # Show the plot
+    plt.show()
+
+def plot_graph_static(nodes, path1, path2=[], show_neighbors=True, show_child=True):
+    plt.figure(figsize=(6, 6))
+    
+    # Plot the edges
+    if show_neighbors:
+        for node in nodes:
+            x, y = node.location  # Get the (x, y) coordinates of the current node
+            for neighbor_id in node.neighbors:
+                neighbor = nodes[neighbor_id]  # Get the neighbor node
+                x_n, y_n = neighbor.location   # Neighbor's coordinates
+                # Plot edge between the node and its neighbor
+                plt.plot([x, x_n], [y, y_n], color='black', linestyle='-', linewidth=1)
+
+    if show_child:
+        for node in nodes:
+            x,y=node.location
+            for child in node.cluster_locations:
+                x_n, y_n = child   # Child's coordinates
+                # Plot edge between the node and its neighbor
+                plt.plot([x, x_n], [y, y_n], color='pink', linestyle='-', linewidth=1)
+        
+        for node in nodes:
+            for index, child in enumerate (node.cluster_locations):
+                x, y = child   # Child's coordinates
+                plt.scatter(x, y, color='purple', s=50)  # Red for all other nodes
+                plt.text(x+1 , y+1, f'{node.cluster_energies[index]}', fontsize=8)
+
+    # Plot the nodes
+    for i, node in enumerate(nodes):
+        x, y = node.location
+        if i == 0:  # Source node
+            plt.scatter(x, y, color='blue', s=100, label='Source' if i == 0 else "")  # Blue for source
+        elif i == 1:  # Sink node
+            plt.scatter(x, y, color='green', s=100, label='Sink' if i == 1 else "")  # Green for sink
+        else:
+            plt.scatter(x, y, color='red', s=100)  # Red for all other nodes
+        # Add labels to the nodes (node_id)
+        plt.text(x , y, f'{node.node_id}', fontsize=12)
+
+    # Plot the path in green
+    for k in range(len(path1) - 1):
+        node1 = nodes[path1[k]]     # Current node
+        node2 = nodes[path1[k + 1]] # Next node in the path
+        x1, y1 = node1.location
+        x2, y2 = node2.location
+        # Plot a green edge between adjacent nodes in the path
+        plt.plot([x1, x2], [y1, y2], color='green', linestyle='-', linewidth=2)
+
+     # Plot the path in green
+    for k in range(len(path2) - 1):
+        node1 = nodes[path2[k]]     # Current node
+        node2 = nodes[path2[k + 1]] # Next node in the path
+        x1, y1 = node1.location
+        x2, y2 = node2.location
+        # Plot a green edge between adjacent nodes in the path
+        plt.plot([x1, x2], [y1, y2], color='red', linestyle='-', linewidth=2)
+
+    # Set plot labels and title
+    plt.xlabel("X")
+    plt.ylabel("Y")
+    plt.title("Graph of Nodes and Edges")
+
+    # Show the legend for source and sink
+    plt.legend()
+
+    # Display grid
+    plt.grid(True)
+
+    # Show the plot for 0.5 seconds and then close
+    plt.show()
+    # plt.pause(0.5)
+    # plt.close()
+
+
+
+def FDN(nodes, rho, tau_min, tau_max, Elec, epsilon):
+    alive_nodes=[]
+    sink_node=nodes[1]
+
+    for node in nodes:
+        if node.node_id != 1:
+            for i in range(5):
+                establish_route(node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max)
+    loop=0
+    mini=0.5
+    total=len(nodes)
+    all_sent=[]
+    while (total>0 and loop<5000):
+        loop+=1
+        for node in nodes:
+            if node.node_id != 1 and node.energy>0:
+                sent, opti_path = send_data(node.node_id, sink_node.node_id, nodes, "", Elec, epsilon, rho, tau_min, tau_max)
+                all_sent.append(opti_path)
+                if (loop %1000 )==1 and loop>1000:
+                    # all_nodes.append(copy.deepcopy(nodes))
+                    for i in range(len(nodes)):
+                        print((all_sent[-(i+1)]))  
+        
+        counter=0
+        total=0
+        for node in nodes:
+            if node.node_id != 1:
+                for energy in node.cluster_energies:
+                    mini=min(mini,energy)
+                    if energy>0:
+                        counter+=1
+                total+=counter
+        
+        if((loop%1000 )== 1):
+            print("alive: ", total, "loop: ", loop)
+            priint_energies(nodes)
+        alive_nodes.append((loop,counter))
+    
+    return alive_nodes
+
+
 # Example of setting up the network, initializing ants, and moving ants
-n = 20              # Number of nodes
-side_length = 500    # Side length of square area of network
-energy = 120        # Same energy level for all nodes
-r_min = 100            # Neighbor node range
-r_max = 250            # Neighbor node range
-num_ants = 50        # Number of ants
+n = 12              # Number of nodes
+side_length = 200    # Side length of square area of network
+energy = 0.5        # Same energy level for all nodes
+r_min = 40            # Neighbor node range
+r_max = 100*(1)            # Neighbor node range
+num_ants = 100        # Number of ants
 initial_pheromone=10.0
 rho = 0.1
 tau_max = 40
 tau_min = 2
-Elec = 10**(-5)
-epsilon = 10**(-6)
+Elec = 50*(10**(-9))
+epsilon = 0.00131*10**(-12)
 
 
 # Generate nodes
 nodes = initialize_nodes(n,side_length, r_min, r_max,energy, num_ants, initial_pheromone)
-source_node=nodes[0]
-sink_node=nodes[1]
+main_source_node=nodes[0]
+main_sink_node=nodes[1]
 path=[]
 
-plot_graph(nodes, path)
+plot_graph_static(nodes, path)
 
 # all_paths = []
 # all_nodes = []
 
-for i in range(5):
-    establish_route(source_node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max)
-    # priint(source_node.pheromone_matrix)
-    path=generate_data_path(source_node, sink_node.node_id,nodes)
-    #print(path)
-    all_paths.append(path)  # Store the current path
-    all_nodes.append(copy.deepcopy(nodes))  
-    # plot_graph(nodes, path, show_neighbors=False)
-print("Original Path: ", path)
-for i in range (29000):
-    send_data(0,1,nodes,"",Elec,epsilon, rho, tau_min, tau_max) 
+    
 
-priint_energies(nodes)
-path1=path
-for i in range(5):
-    establish_route(source_node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max)
-    # priint(source_node.pheromone_matrix)
-    path=generate_data_path(source_node, sink_node.node_id,nodes)
-    #print(path)
-    # plot_graph(nodes, path, show_neighbors= False)
+alive_nodes = FDN(nodes, rho, tau_min, tau_max, Elec, epsilon)
+# plot_graph(all_nodes,[], show_neighbors=False, interval=1)
+plot_alive_nodes(alive_nodes)
 
-plot_graph(all_nodes, all_paths, show_neighbors=False)
 
+# for i in range(5):
+#     establish_route(source_node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max)
+#     # priint(source_node.pheromone_matrix)
+#     path=generate_data_path(source_node, sink_node.node_id,nodes)
+#     #print(path)
+#     all_paths.append(path)  # Store the current path
+#     all_nodes.append(copy.deepcopy(nodes))  
+#     # plot_graph(nodes, path, show_neighbors=False)
+# print("Original Path: ", path)
+# lop=0
+# mini=0.5
+# while (abs(mini)>0 ):
+# # for i in range(12000):
+#     send_data(0,1,nodes,"",Elec,epsilon, rho, tau_min, tau_max) 
+#     mini=0.5
+#     lop+=1
+#     for node in nodes:
+#         mini=min(mini, node.energy)
+# print("First dead node ", lop)
 # priint_energies(nodes)
+# path1=path
+# for i in range(5):
+#     establish_route(source_node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max)
+#     # priint(source_node.pheromone_matrix)
+#     path=generate_data_path(source_node, sink_node.node_id,nodes)
+#     #print(path)
+#     # plot_graph(nodes, path, show_neighbors= False)
+
+# plot_graph(all_nodes, all_paths, show_neighbors=False, interval=0.1)
+
+# # priint_energies(nodes)
