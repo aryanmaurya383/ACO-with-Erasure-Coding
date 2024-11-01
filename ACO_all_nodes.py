@@ -462,7 +462,7 @@ def generate_data_path(source_node, sink_node_id, nodes):
     # Return the final path when we reach the sink node
     return path
 
-def send_data(source_node_id, sink_node_id, nodes, data, Elec, epsilon, rho, tau_min, tau_max):
+def send_data(source_node_id, sink_node_id, nodes, data,size, Elec, epsilon, rho, tau_min, tau_max):
     """
     Sends a data packet from source to sink. Uses pheromone levels to decide the next hop
     while considering the packet loss ratio from the loss matrix of the current node.
@@ -474,8 +474,10 @@ def send_data(source_node_id, sink_node_id, nodes, data, Elec, epsilon, rho, tau
     :param Elec: Transmission energy
     :param epsilon: Amplification energy
     """
-    sent_packets = []
-    received_packets = []
+    if(data==None):
+        data=1
+
+
     # Initialize the data packet with source, sink, current position, path, and the data field.
     optimal_path=generate_data_path(nodes[source_node_id], sink_node_id, nodes)
     temp_path =copy.deepcopy(optimal_path)
@@ -488,39 +490,53 @@ def send_data(source_node_id, sink_node_id, nodes, data, Elec, epsilon, rho, tau
         'sink': sink_node_id,
         'current_position': source_node_id,
         'path': optimal_path,
-        'data': data,
+        'times': data,
         'lost': False,
-        'size': 4000
+        'size': size
     }
-    packet['path'].pop()
-    sent_packets.append(packet)
+    # packet['path'].pop()
+    dropped=0
     #print(f"Data packet sent from Source Node {source_node_id} to Sink Node {sink_node_id} with data: {data}")
 
     # Move the packet through the network
-    while packet['current_position'] != sink_node_id:
-        if len(packet['path']) == 0:
-            # nodes[packet['current_position']].energy=0
-            break
-        next_hop = move_data(packet, nodes)
-
-        if next_hop is None:  # Packet dropped due to loss
-            packet['lost'] = True
-            #print(f"Packet dropped while moving from Node {packet['current_position']}.")
-            return sent_packets, temp_path
-
-        #Update Energy values
-        update_energy(Elec, epsilon, packet['size'], nodes[packet['current_position']], nodes[next_hop], nodes, rho, tau_min, tau_max)
-
-        # Update the packet's path and current position
+    while data>0:
+        data-=1
+        packet['source']=source_node_id
+        packet['sink']=sink_node_id
+        packet['current_position']=source_node_id
+        packet['size']=400
+        packet['lost']=False
+        packet['path']=copy.deepcopy(optimal_path)
         packet['path'].pop()
-        packet['current_position'] = next_hop
+
+        while packet['current_position'] != sink_node_id:
+            if len(packet['path']) == 0:
+                # nodes[packet['current_position']].energy=0
+                break
+            next_hop = move_data(packet, nodes)
+
+            if next_hop is None:  # Packet dropped due to loss
+                packet['lost'] = True
+                break
+                #print(f"Packet dropped while moving from Node {packet['current_position']}.")
+                # return sent_packets, temp_path
+
+            #Update Energy values
+            update_energy(Elec, epsilon, packet['size'], nodes[packet['current_position']], nodes[next_hop], nodes, rho, tau_min, tau_max)
+
+            # Update the packet's path and current position
+            packet['path'].pop()
+            packet['current_position'] = next_hop
+        
+        if(packet['lost']):
+            dropped+=1
 
     # If it reaches the sink, add it to the received packets list
     #print(f"Packet successfully reached Sink Node {sink_node_id} with data: {packet['data']}")
-    received_packets.append(packet)
+    # received_packets.append(packet)
     check_energy_levels(nodes)
 
-    return sent_packets, temp_path
+    return dropped, temp_path,
 
 def move_data(packet, nodes):
     """
@@ -774,7 +790,7 @@ def plot_alive_nodes(data):
     
     # Create the plot
     plt.figure(figsize=(8, 6))
-    plt.plot(rounds, alive_nodes, marker='o', linestyle='-', color='b', label='Alive Nodes')
+    plt.plot(rounds, alive_nodes, linestyle='-', color='b', label='Alive Nodes')
     
     # Add labels and title
     plt.xlabel('Round Number')
@@ -882,7 +898,7 @@ def F_Disconnected_N(nodes, rho, tau_min, tau_max, Elec, epsilon):
         total_alive=0
         for node in nodes:
             if node.node_id != 1 and node.energy>0:
-                sent, opti_path = send_data(node.node_id, sink_node.node_id, nodes, "", Elec, epsilon, rho, tau_min, tau_max)
+                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, None, 4000, Elec, epsilon, rho, tau_min, tau_max)
                 all_sent.append(opti_path)
                 if(opti_path[-1]==1):
                     total_alive+=1
@@ -926,7 +942,7 @@ def FDN(nodes, rho, tau_min, tau_max, Elec, epsilon):
         loop+=1
         for node in nodes:
             if node.node_id != 1 and node.energy>0:
-                sent, opti_path = send_data(node.node_id, sink_node.node_id, nodes, "", Elec, epsilon, rho, tau_min, tau_max)
+                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, None, 4000, Elec, epsilon, rho, tau_min, tau_max)
                 all_sent.append(opti_path)
                 if (loop %1000 )==1 and loop>1000:
                     # all_nodes.append(copy.deepcopy(nodes))
@@ -951,7 +967,81 @@ def FDN(nodes, rho, tau_min, tau_max, Elec, epsilon):
     return alive_nodes
 
 
+def with_erasure(nodes, rho,tau_min, tau_max, number_of_rounds=500):
+    
+    for node in nodes:
+            if node.node_id != 1:
+                for i in range(5):
+                    establish_route(node.node_id, 1, nodes, rho, tau_min, tau_max)
+    print("starting")
+    loop=0
+    success=0
+    erasure_code=[]
+    while(loop<number_of_rounds):
+        loop+=1
+        if(loop%100==1):
+            print("Loop: ", loop)
+        for node in nodes:
+            if node.node_id != 1:
+                dropped, opti_path = send_data(node.node_id, 1, nodes, 15, 400, Elec, epsilon, rho, tau_min, tau_max)
+                if(dropped<=5):
+                    success+=1
+        erasure_code.append((loop, success))
+    
+    return erasure_code
 
+def wo_erasure_code(nodes, rho,tau_min, tau_max, number_of_rounds=500):
+    
+    wo_erasure_code=[]
+    loop=0
+    success=0
+    while(loop<number_of_rounds):
+        loop+=1
+        if(loop%100==1):
+            print("Loop: ", loop)
+        for node in nodes:
+            if node.node_id != 1:
+                dropped, opti_path = send_data(node.node_id, 1, nodes, 10, 400, Elec, epsilon, rho, tau_min, tau_max)
+                if(dropped==0):
+                    success+=1
+        wo_erasure_code.append((loop, success))
+
+    return wo_erasure_code
+
+def packet_loss_ratio(nodes, rho, tau_min, tau_max, mini_loss, max_loss):
+    #define np.matrix of size nXn with each entry being a random number between 0.3 to 0.4 and aij=aji
+    loss_matrix=np.random.rand(len(nodes),len(nodes)) 
+    for i in range(len(nodes)):
+        for j in range(len(nodes)):
+            loss_matrix[i][j]=loss_matrix[i][j]*(max_loss-mini_loss)+mini_loss
+            loss_matrix[j][i]=loss_matrix[i][j]
+    for node in nodes:
+        node.loss_matrix=loss_matrix
+
+    #deepcopy nodes
+    nodes1=copy.deepcopy(nodes)
+    number_of_rounds=500
+    w_erasure=with_erasure(nodes, rho, tau_min, tau_max, number_of_rounds)
+    wo_erasure=wo_erasure_code(nodes1, rho, tau_min, tau_max, number_of_rounds)
+    plot_packet_loss(w_erasure, wo_erasure)
+    print("Packet Success Ratio with Erasure Code: ", w_erasure[-1][1]/((len(nodes)-1)*number_of_rounds))
+    print("Packet Success Ratio without Erasure Code: ", wo_erasure[-1][1]/((len(nodes)-1)*number_of_rounds))
+    
+def plot_packet_loss(w_erasure, wo_erasure):
+    rounds1, success1 = zip(*w_erasure)
+    rounds2, success2 = zip(*wo_erasure)
+    
+    plt.figure(figsize=(8, 6))
+    plt.plot(rounds1, success1, linestyle='-', color='b', label='With Erasure Code')
+    plt.plot(rounds2, success2, linestyle='-', color='r', label='Without Erasure Code')
+    
+    plt.xlabel('Round Number')
+    plt.ylabel('Number of Successful Packets')
+    plt.title('Packet Loss Ratio Over Rounds')
+    
+    plt.grid(True)
+    plt.legend()
+    plt.show()
 
 
 # Example of setting up the network, initializing ants, and moving ants
@@ -981,11 +1071,11 @@ plot_graph_static(nodes, path)
 # all_nodes = []
 
     
-
+packet_loss_ratio(nodes, rho, tau_min, tau_max, 0.1, 0.2)
 # alive_nodes = FDN(nodes, rho, tau_min, tau_max, Elec, epsilon)
-alive_nodes = F_Disconnected_N(nodes, rho, tau_min, tau_max, Elec, epsilon)
+# alive_nodes = F_Disconnected_N(nodes, rho, tau_min, tau_max, Elec, epsilon)
 # plot_graph(all_nodes,[], show_neighbors=False, interval=1)
-plot_alive_nodes(alive_nodes)
+# plot_alive_nodes(alive_nodes)
 
 
 # for i in range(5):
