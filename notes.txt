@@ -1,3 +1,9 @@
+TODO:
+Implement a way to compare the BOA CH selection mechanism vs OUR CH selection mechanism
+Implement Data Sent over Received comparison for both OUR (inlcuding Erasure Codes) and trivial ACO algo
+Implement metric like FDN, lifetime of the network, to compare OUR and ACOCR algo (implemented in the Forest fire paper)
+
+
 class Node:
     def __init__(self, node_id, x, y, energy, n, max_num_ants):
         self.node_id = node_id                      # ID of the node

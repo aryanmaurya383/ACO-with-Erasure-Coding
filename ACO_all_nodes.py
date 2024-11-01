@@ -479,7 +479,9 @@ def send_data(source_node_id, sink_node_id, nodes, data, Elec, epsilon, rho, tau
     # Initialize the data packet with source, sink, current position, path, and the data field.
     optimal_path=generate_data_path(nodes[source_node_id], sink_node_id, nodes)
     temp_path =copy.deepcopy(optimal_path)
-    # print(temp_path)
+    # if(optimal_path[-1]!=sink_node_id):
+    #     return None, temp_path
+    # # print(temp_path)
     optimal_path.reverse()
     packet = {
         'source': source_node_id,
@@ -863,6 +865,51 @@ def plot_graph_static(nodes, path1, path2=[], show_neighbors=True, show_child=Tr
 
 
 
+def F_Disconnected_N(nodes, rho, tau_min, tau_max, Elec, epsilon):
+    alive_nodes=[]
+    sink_node=nodes[1]
+
+    for node in nodes:
+        if node.node_id != 1:
+            for i in range(5):
+                establish_route(node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max)
+    loop=0
+    mini=0.5
+    total_alive=len(nodes)-1
+    all_sent=[]
+    while (total_alive>0):
+        loop+=1
+        total_alive=0
+        for node in nodes:
+            if node.node_id != 1 and node.energy>0:
+                sent, opti_path = send_data(node.node_id, sink_node.node_id, nodes, "", Elec, epsilon, rho, tau_min, tau_max)
+                all_sent.append(opti_path)
+                if(opti_path[-1]==1):
+                    total_alive+=1
+                # if (loop %1000 )==1 and loop>1000:
+                #     # all_nodes.append(copy.deepcopy(nodes))
+                #     for i in range(len(nodes)):
+                #         print((all_sent[-(i+1)]))  
+        
+        # counter=0
+        # total=0
+        # for node in nodes:
+        #     if node.node_id != 1:
+        #         for energy in node.cluster_energies:
+        #             mini=min(mini,energy)
+        #             if energy>0:
+        #                 counter+=1
+        #         total+=counter
+        
+        if((loop%1000 )== 1):
+            print("alive: ", total_alive, "loop: ", loop)
+            priint_energies(nodes)
+        alive_nodes.append((loop,total_alive))
+    
+    return alive_nodes
+
+
+
 def FDN(nodes, rho, tau_min, tau_max, Elec, epsilon):
     alive_nodes=[]
     sink_node=nodes[1]
@@ -904,8 +951,11 @@ def FDN(nodes, rho, tau_min, tau_max, Elec, epsilon):
     return alive_nodes
 
 
+
+
+
 # Example of setting up the network, initializing ants, and moving ants
-n = 12              # Number of nodes
+n = 20              # Number of nodes
 side_length = 200    # Side length of square area of network
 energy = 0.5        # Same energy level for all nodes
 r_min = 40            # Neighbor node range
@@ -932,7 +982,8 @@ plot_graph_static(nodes, path)
 
     
 
-alive_nodes = FDN(nodes, rho, tau_min, tau_max, Elec, epsilon)
+# alive_nodes = FDN(nodes, rho, tau_min, tau_max, Elec, epsilon)
+alive_nodes = F_Disconnected_N(nodes, rho, tau_min, tau_max, Elec, epsilon)
 # plot_graph(all_nodes,[], show_neighbors=False, interval=1)
 plot_alive_nodes(alive_nodes)
 
