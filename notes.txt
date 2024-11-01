@@ -1,5 +1,5 @@
 TODO:
-Implement a way to compare the BOA CH selection mechanism vs OUR CH selection mechanism
+Implement a way to compare the BOA CH selection mechanism vs OUR (called select_new_CH) CH selection mechanism, read the paper to decide the metric(Depanshu)
 Implement Data Sent over Received comparison for both OUR (inlcuding Erasure Codes) and trivial ACO algo
 Implement metric like FDN, lifetime of the network, to compare OUR and ACOCR algo (implemented in the Forest fire paper)
 
