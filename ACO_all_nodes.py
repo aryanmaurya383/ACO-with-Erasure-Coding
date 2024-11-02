@@ -620,13 +620,13 @@ def update_energy(Eelec, epsilon, l, transmiting_node, receiving_node, nodes, rh
 
     if(receiving_node.energy<=0):
         receiving_node.energy=0
-        select_new_CH_by_BAO(receiving_node, nodes[1].location)
+        select_new_CH(receiving_node, nodes[1].location)
         # remove_node(nodes, receiving_node.node_id, rho, tau_min, tau_max)
         
 
     if(transmiting_node.energy<=0):
         transmiting_node.energy=0
-        select_new_CH_by_BAO(transmiting_node, nodes[1].location)
+        select_new_CH(transmiting_node, nodes[1].location)
         # remove_node(nodes, transmiting_node.node_id, rho, tau_min, tau_max)
 
     
