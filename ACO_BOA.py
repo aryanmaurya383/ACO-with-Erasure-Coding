@@ -37,6 +37,7 @@ class Node:
         self.cluster_d_avg = []                     # All neighboring sensor nodes average distance with other nodes
         self.curr_CH = 0                            # index in the cluster_list of the current cluster head
         self.fragnance = 0                          # Fragnance of the node
+        self.fragnances = []                        # Fragnance of the neighbors
         self.fitness = 0                            # Fitness of the node
 
     def add_neighbor(self, neighbor_id,  loss_percent=0):
@@ -618,11 +619,14 @@ def find_distance(location1, location2):
     return math.sqrt((location1[0] - location2[0]) ** 2 + (location1[1] - location2[1]) ** 2)
 
 def select_new_CH_by_BAO(node, sink_node_location, max_iterations=100):
+    max_index = -1
+    new_ch_index = -1
+    lambda_val = 1 
     # Initialize fragrance dictionary to store neighbors' fragrances
     node.fragrances = {neighbor: 0 for neighbor in node.neighbors}
 
     # Calculate initial fitness and fragrance for the node
-    f1 = 1 / max(1,node.energy)  # Residual energy
+    f1 = 0 if node.energy == 0 else 1 / node.energy  # Residual energy
     f2 = sum([find_distance(node.location, ch) for ch in node.cluster_locations]) / len(node.cluster_locations)
     f3 = find_distance(node.location, sink_node_location)
     f4 = len(node.neighbors)
@@ -635,30 +639,42 @@ def select_new_CH_by_BAO(node, sink_node_location, max_iterations=100):
     # Calculate and store fragrance for each neighbor
     iterator = 0
     for neighbor in node.neighbors:
-        neighbor_fitness = delta1 * (1 / 10) + delta2 * f2 + delta3 * f3 + delta4 * f4 + delta5 * f5
+        neighbor_fitness = delta1 * f1 + delta2 * f2 + delta3 * f3 + delta4 * f4 + delta5 * f5
         node.fragrances[neighbor] = sensory_modality * (neighbor_fitness ** power_exponent)
         iterator += 1
 
+    print("node fragnance", node.fragrances)
     # Main BOA loop for updating positions
     for t in range(max_iterations):
         # Determine global best g_star within node's neighborhood (node and neighbors)
-        neighborhood = [node] + node.neighbors
-        g_star = max(neighborhood, key=lambda n: 10).location
+        # neighborhood_locations = [node] + node.neighbors
+        # neighborhood_fragrances = [node.fragrance] + node.fragrances
+        g_star = node.location
 
         r = random.random()
-        if r < switch_probability:  # Global search phase
-            node.location = node.location + r * (find_distance(g_star, node.location)) * node.fragrance
-        else:  # Local search phase
-            if len(node.neighbors) >= 2:
-                j, k = random.sample(node.cluster_locations, 2)
-                node.location = node.location + r * (find_distance(j, k)) * node.fragrance
+        # if r < switch_probability:  # Global search phase
+        #     node.location = node.location + r * (find_distance(g_star, node.location)) * node.fragrance
+        # else:  # Local search phase
+        #     if len(node.neighbors) >= 2:
+        #         j, k = random.sample(node.cluster_locations, 2)
+        #         node.location = node.location + r * (find_distance(j, k)) * node.fragrance
 
         # Recalculate fitness and fragrance after position update
-        node.fitness = delta1 * (1 / max(node.energy,1)) + delta2 * f2 + delta3 * f3 + delta4 * f4 + delta5 * f5
+        if node.energy == 0:
+            continue
+        node.fitness = delta1 * 1 / node.energy + delta2 * f2 + delta3 * f3 + delta4 * f4 + delta5 * f5
         node.fragrance = sensory_modality * (node.fitness ** power_exponent)
         for neighbor in node.neighbors:
             neighbor_fitness = delta1 * (1 / 10) + delta2 * f2 + delta3 * f3 + delta4 * f4 + delta5 * f5
             node.fragrances[neighbor] = sensory_modality * (neighbor_fitness ** power_exponent)
+            
+        # for i in range(len(node.cluster_locations)):
+        for i in node.neighbors:
+            if node.fragrances[i] > node.fragrance:
+                node.fragrance = node.fragrances[i]
+                node.location = node.cluster_locations[i]
+                node.energy = node.cluster_energies[i]
+                node.curr_CH = i
 
     return node
 
@@ -698,7 +714,7 @@ def select_new_CH(node, sink_node_location):
         # Update the current CH index
         node.curr_CH = new_ch_index
 
-def plot_graph(all_nodes, all_paths, show_neighbors=True, show_child=True, interval=5):
+def plot_graph(all_nodes, all_paths, show_neighbors=True, show_child=True, interval=0.01):
     fig, ax = plt.subplots(figsize=(6, 6))
 
     # Helper function to update the plot frame by frame
@@ -767,7 +783,7 @@ def plot_graph(all_nodes, all_paths, show_neighbors=True, show_child=True, inter
         ax.grid(True)
 
     # Create the animation
-    ani = animation.FuncAnimation(fig, update, frames=len(all_nodes), interval=interval, repeat=False)
+    ani = animation.FuncAnimation(fig, update, frames=len(all_nodes), interval=0.001, repeat=False)
 
     # Show the animation
     plt.show()
@@ -845,6 +861,6 @@ for i in range(5):
     #print(path)
     # plot_graph(nodes, path, show_neighbors= False)
 
-plot_graph(all_nodes, all_paths, show_neighbors=False, interval=0.1)
+plot_graph(all_nodes, all_paths, show_neighbors=False, interval=0.0001)
 
 # priint_energies(nodes)
