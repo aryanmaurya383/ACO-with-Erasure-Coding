@@ -9,14 +9,6 @@ import matplotlib.animation as animation
 all_nodes = []
 all_paths = []
 
-# Define constants for BOA parameters
-sensory_modality = 0.01  # Sensory modality (c)
-power_exponent = 0.5     # Power exponent (a)
-switch_probability = 0.8  # Probability to choose between global and local search
-
-# Fitness function weights (from earlier equations)
-delta1, delta2, delta3, delta4, delta5 = 0.35, 0.25, 0.2, 0.1, 0.1
-
 # Node Class
 class Node:
     def __init__(self, node_id, x, y, energy, initial_pheromone, n, max_num_ants):
@@ -34,10 +26,6 @@ class Node:
         self.cluster_energies = []                  # All neighboring sensor nodes energies for this CH
         self.cluster_d_avg = []                     # All neighboring sensor nodes average distance with other nodes
         self.curr_CH = 0                            # index in the cluster_list of the current cluster head
-        self.fragnance = 0                          # Fragnance of the node
-        self.fragnances = []                        # Fragnance of the neighbors
-        self.fitness = 0                            # Fitness of the node
-        self.virtual_position = (x,y)               # Virtual position of the node
 
     def add_neighbor(self, neighbor_id,  loss_percent=0):
         self.neighbors.append(neighbor_id)
@@ -123,7 +111,7 @@ class Ant:
 
 
     # Function to move the ant to the next hop
-    def move_ant(self, nodes, alpha=1.0, beta=2.0, m=0.3):
+    def move_ant(self, nodes, alpha=1.0, beta=2.0, m=0.3, trivial=False):
         if self.dropped:
             #ant reached a dead end
             return
@@ -150,7 +138,7 @@ class Ant:
         else:
             # Calculate next hop using probabilities during forward movement
             current_node = nodes[self.current_position]
-            probabilities = get_next_hop_probabilities(current_node, self, nodes, alpha, beta, m)
+            probabilities = get_next_hop_probabilities(current_node, self, nodes, alpha, beta, m, trivial)
             
             if(len(probabilities)==0 or sum([prob for _, prob in probabilities])==0):
                 self.dropped=True
@@ -329,8 +317,15 @@ def get_eta(current_node, neighbor_node, source_node, sink_node, m):
     #print(eta, "hehee")
     return eta
 
+def get_trivial_eta(current_node, neighbor_node):
+    dist_i_j = euclidean_distance(current_node, neighbor_node)
+    eta=1/dist_i_j
+    return eta
+
+
+
 # Function to calculate the probability list for choosing the next hop
-def get_next_hop_probabilities(node, ant, nodes, alpha, beta, m):
+def get_next_hop_probabilities(node, ant, nodes, alpha, beta, m, trivial=False):
     """
     This function calculates the probability list for choosing the next hop for an ant.
     It returns both the node IDs of the neighbors and the corresponding probabilities.
@@ -356,7 +351,10 @@ def get_next_hop_probabilities(node, ant, nodes, alpha, beta, m):
         if neighbor_id not in ant.visited_nodes:  # Avoid returning to visited nodes
             neighbor_node = nodes[neighbor_id]
             pheromone_level = ant.pheromone_matrix[current_id][neighbor_id]
-            eta_value = get_eta(node, neighbor_node, source_node, sink_node, m)
+            if trivial:
+                eta_value = get_trivial_eta(node, neighbor_node)
+            else:
+                eta_value = get_eta(node, neighbor_node, source_node, sink_node, m)
             pheromones.append(pheromone_level ** alpha)  # Pheromone influence
             etas.append(eta_value ** beta)               # Eta influence
             valid_neighbors.append(neighbor_id)          # Add valid neighbor ID
@@ -400,7 +398,7 @@ def choose_next_hop(probability_list):
     
     return neighbors[chosen_index]
 
-def establish_route(source_node_id, sink_node_id,  nodes, rho, tau_min, tau_max):
+def establish_route(source_node_id, sink_node_id,  nodes, rho, tau_min, tau_max, trivial=False):
     """
     Establish a route by generating k ants from source to sink and back.
     Move ants and generate new ants after every few steps until all k ants are generated.
@@ -424,7 +422,7 @@ def establish_route(source_node_id, sink_node_id,  nodes, rho, tau_min, tau_max)
             #print("aryan")
             #print(ant.curr_back_index)
             #print(ant.visited_nodes)
-            ant.move_ant(nodes)
+            ant.move_ant(nodes, trivial)
     
     #When all ants reach the source node then update pheromone and remove ants
     evaporate_pheromones(nodes[source_node_id], rho, tau_min)
@@ -474,7 +472,7 @@ def generate_data_path(source_node, sink_node_id, nodes):
     # Return the final path when we reach the sink node
     return path
 
-def send_data(source_node_id, sink_node_id, nodes, data,size, Elec, epsilon, rho, tau_min, tau_max):
+def send_data(source_node_id, sink_node_id, nodes, data,size, Elec, epsilon, rho, tau_min, tau_max, trivial=False):
     """
     Sends a data packet from source to sink. Uses pheromone levels to decide the next hop
     while considering the packet loss ratio from the loss matrix of the current node.
@@ -489,6 +487,8 @@ def send_data(source_node_id, sink_node_id, nodes, data,size, Elec, epsilon, rho
     if(data==None):
         data=1
 
+    if(nodes[source_node_id].energy==0):
+        return data, []
 
     # Initialize the data packet with source, sink, current position, path, and the data field.
     optimal_path=generate_data_path(nodes[source_node_id], sink_node_id, nodes)
@@ -516,15 +516,16 @@ def send_data(source_node_id, sink_node_id, nodes, data,size, Elec, epsilon, rho
         packet['source']=source_node_id
         packet['sink']=sink_node_id
         packet['current_position']=source_node_id
-        packet['size']=400
+        packet['size']=size
         packet['lost']=False
         packet['path']=copy.deepcopy(optimal_path)
         packet['path'].pop()
 
         while packet['current_position'] != sink_node_id:
             if len(packet['path']) == 0:
+                packet['path'].append(sink_node_id)
                 # nodes[packet['current_position']].energy=0
-                break
+                # break
             next_hop = move_data(packet, nodes)
 
             if next_hop is None:  # Packet dropped due to loss
@@ -546,7 +547,7 @@ def send_data(source_node_id, sink_node_id, nodes, data,size, Elec, epsilon, rho
     # If it reaches the sink, add it to the received packets list
     #print(f"Packet successfully reached Sink Node {sink_node_id} with data: {packet['data']}")
     # received_packets.append(packet)
-    check_energy_levels(nodes)
+    check_energy_levels(nodes, rho, tau_min, tau_max, trivial)
 
     return dropped, temp_path,
 
@@ -607,19 +608,19 @@ def update_energy(Eelec, epsilon, l, transmiting_node, receiving_node, nodes, rh
 
     if(receiving_node.energy<=0):
         receiving_node.energy=0
-        select_new_CH_by_BAO(receiving_node, nodes[1].location)
+        select_new_CH(receiving_node, nodes[1].location)
         # remove_node(nodes, receiving_node.node_id, rho, tau_min, tau_max)
         
 
     if(transmiting_node.energy<=0):
         transmiting_node.energy=0
-        select_new_CH_by_BAO(transmiting_node, nodes[1].location)
+        select_new_CH(transmiting_node, nodes[1].location)
         # remove_node(nodes, transmiting_node.node_id, rho, tau_min, tau_max)
 
     
     return 
 
-def check_energy_levels(nodes):
+def check_energy_levels(nodes, rho, tau_min, tau_max, trivial=False):
     """
     This function checks the energy levels of the current CH of each node in the cluster.
     If the CH's energy is less than half of the average energy of the cluster, it selects a new CH.
@@ -634,11 +635,13 @@ def check_energy_levels(nodes):
         # Check if the current CH's energy is less than half of the average cluster energy
         if curr_ch_energy < (0.5 * avg_cluster_energy):
             # Select a new CH
-            select_new_CH_by_BAO(node, nodes[1].location)
+            select_new_CH(node, nodes[1].location)
+            for node in nodes:
+                establish_route(node.node_id, 1, nodes, rho,tau_min,tau_max, trivial)
             # path=generate_data_path(source_node, sink_node.node_id,nodes)
             # #print(path)
             # all_paths.append(path)  # Store the current path
-            all_nodes.append(copy.deepcopy(nodes)) 
+            # all_nodes.append(copy.deepcopy(nodes)) 
         if avg_cluster_energy == 0:
             remove_fully_dead_cluster(node, nodes)
 
@@ -653,71 +656,6 @@ def remove_fully_dead_cluster(dead_node, nodes):
             node.pheromone_matrix[i][dead_node.node_id]=0
             node.pheromone_matrix[dead_node.node_id][i]=0
 
-
-def select_new_CH_by_BAO(node, sink_node_location, max_iterations=100):
-    new_ch_index = -1
-
-    # Initialize fragrance dictionary to store neighbors' fragrances
-    node.fragrances = {neighbor: 0 for neighbor in node.neighbors}
-    node.cluster_energies[node.curr_CH] = node.energy
-
-    # Calculate initial fitness and fragrance for the node
-    f1 = 0 if node.energy == 0 else 1 / node.energy  # Residual energy
-    f2 = sum(find_distance(node.location, ch) for ch in node.cluster_locations) / len(node.cluster_locations)
-    f3 = find_distance(node.location, sink_node_location)
-    f4 = len(node.neighbors)
-    f5 = np.sqrt(sum(find_distance(node.location, n) ** 2 for n in node.cluster_locations) / len(node.neighbors))
-
-    # Combined fitness (f) as per Eq. (12)
-    node.fitness = delta1 * f1 + delta2 * f2 + delta3 * f3 + delta4 * f4 + delta5 * f5
-    node.fragrance = sensory_modality * (node.fitness ** power_exponent)
-
-    # Calculate and store fragrance for each neighbor
-    for neighbor in node.neighbors:
-        neighbor_fitness = delta1 * f1 + delta2 * f2 + delta3 * f3 + delta4 * f4 + delta5 * f5
-        node.fragrances[neighbor] = sensory_modality * (neighbor_fitness ** power_exponent)
-
-    # Main BOA loop for updating virtual positions
-    for t in range(max_iterations):
-        # Determine the best neighbor in the neighborhood (node and neighbors)
-        best_neighbor = max([node] + node.neighbors, key=lambda n: node.fragrances.get(n, node.fragrance))
-        g_star = best_neighbor.location
-
-        r = random.random()
-        if r < switch_probability:  # Global search phase
-            node.virtual_position = node.location + r * (find_distance(g_star, node.location)) * node.fragrance
-        else:  # Local search phase
-            if len(node.neighbors) >= 2:
-                j, k = random.sample(node.cluster_locations, 2)
-                node.virtual_position = node.location + r * (find_distance(j, k)) * node.fragrance
-
-        # Recalculate fitness and fragrance after position update
-        f1 = 0 if node.energy == 0 else 1 / node.energy
-        f2 = sum(find_distance(node.virtual_position, ch) for ch in node.cluster_locations) / len(node.cluster_locations)
-        f3 = find_distance(node.virtual_position, sink_node_location)
-        f4 = len(node.neighbors)
-        f5 = np.sqrt(sum(find_distance(node.virtual_position, n) ** 2 for n in node.cluster_locations) / len(node.neighbors))
-
-        # Skip updating fragrance if energy is zero
-        if node.energy == 0:
-            continue
-        
-        node.fitness = delta1 * f1 + delta2 * f2 + delta3 * f3 + delta4 * f4 + delta5 * f5
-        node.fragrance = sensory_modality * (node.fitness ** power_exponent)
-        
-        for neighbor in node.neighbors:
-            neighbor_fitness = delta1 * f1 + delta2 * f2 + delta3 * f3 + delta4 * f4 + delta5 * f5
-            node.fragrances[neighbor] = sensory_modality * (neighbor_fitness ** power_exponent)
-        
-        # Select the best node based on fragrance and update CH if fragrance is higher
-        for i, neighbor in enumerate(node.neighbors):
-            if node.fragrances[neighbor] > node.fragrance:
-                node.fragrance = node.fragrances[neighbor]
-                node.location = node.cluster_locations[i]
-                node.energy = node.cluster_energies[i]
-                node.curr_CH = i
-
-    return node
 
 def select_new_CH(node, sink_node_location):
     """
@@ -1003,8 +941,9 @@ def F_Disconnected_N(nodes, rho, tau_min, tau_max, Elec, epsilon):
 
 
 
-def FDN(nodes, rho, tau_min, tau_max, Elec, epsilon):
+def ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop):
     alive_nodes=[]
+    packet_loss_ratio=[]
     sink_node=nodes[1]
 
     for node in nodes:
@@ -1014,17 +953,21 @@ def FDN(nodes, rho, tau_min, tau_max, Elec, epsilon):
     loop=0
     mini=0.5
     total=len(nodes)
+    counter=100
+    success=0
     all_sent=[]
-    while (total>0 and loop<5000):
+    while (counter>20 and loop<max_loop):
         loop+=1
         for node in nodes:
             if node.node_id != 1 and node.energy>0:
                 dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, None, 4000, Elec, epsilon, rho, tau_min, tau_max)
-                all_sent.append(opti_path)
-                if (loop %1000 )==1 and loop>1000:
+                if dropped==0:
+                    success+=1
+                # all_sent.append(opti_path)
+                # if (loop %1000 )==1 and loop>1000:
                     # all_nodes.append(copy.deepcopy(nodes))
-                    for i in range(len(nodes)):
-                        print((all_sent[-(i+1)]))  
+                    # for i in range(len(nodes)):
+                    #     print((all_sent[-(i+1)]))  
         
         counter=0
         total=0
@@ -1037,12 +980,77 @@ def FDN(nodes, rho, tau_min, tau_max, Elec, epsilon):
                 total+=counter
         
         if((loop%1000 )== 1):
-            print("alive: ", total, "loop: ", loop)
+            print("alive: ", counter, "loop: ", loop)
             priint_energies(nodes)
         alive_nodes.append((loop,counter))
+        packet_loss_ratio.append((loop, success))
     
-    return alive_nodes
+    return alive_nodes, packet_loss_ratio
 
+def trivial_ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop):
+    alive_nodes=[]
+    packet_loss_ratio=[]
+    sink_node=nodes[1]
+
+    for node in nodes:
+        if node.node_id != 1:
+            for i in range(5):
+                establish_route(node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max, True)
+    loop=0
+    mini=0.5
+    total=len(nodes)
+    counter=100
+    success=0
+    all_sent=[]
+    while (counter>20 and loop<max_loop):
+        loop+=1
+        for node in nodes:
+            if node.node_id != 1 and node.energy>0:
+                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, None, 4000, Elec, epsilon, rho, tau_min, tau_max, True)
+                if(dropped==0):
+                    success+=1
+                    
+                # all_sent.append(opti_path)
+                # if (loop %1000 )==1 and loop>1000:
+                    # all_nodes.append(copy.deepcopy(nodes))
+                    # for i in range(len(nodes)):
+                    #     print((all_sent[-(i+1)]))  
+        
+        counter=0
+        total=0
+        for node in nodes:
+            if node.node_id != 1:
+                for energy in node.cluster_energies:
+                    mini=min(mini,energy)
+                    if energy>0:
+                        counter+=1
+                total+=counter
+        
+        if((loop%1000 )== 1):
+            print("alive: ", counter, "loop: ", loop)
+            priint_energies(nodes)
+        alive_nodes.append((loop,counter))
+        packet_loss_ratio.append((loop, success))
+    
+    return alive_nodes, packet_loss_ratio
+
+def FDN(nodes, rho, tau_min, tau_max, Elec, epsilon):
+    nodes1=copy.deepcopy(nodes)
+    max_loop=2000
+    aco_network_life, aco_packet_loss=ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop)
+    trivial_aco_network_life, trivial_aco_packet_loss=trivial_ACO_network_life(nodes1, rho, tau_min, tau_max, Elec, epsilon, max_loop)
+    label1="ACO Network Life"
+    label2="Trivial ACO Network Life"
+    x_axis="Round Number"
+    y_axis="Number of Alive Nodes"
+    title='ACO Network Life vs Trivial ACO Network Life'
+    plot_packet_loss(aco_network_life, trivial_aco_network_life, label1, label2, x_axis, y_axis, title)
+    label1="ACO Packet Loss"
+    label2="Trivial ACO Packet Loss"
+    x_axis="Round Number"
+    y_axis="Number of Successful Packets"
+    title='ACO Packet Loss vs Trivial ACO Packet Loss'
+    plot_packet_loss(aco_packet_loss, trivial_aco_packet_loss, label1, label2, x_axis, y_axis, title)
 
 def with_erasure(nodes, rho,tau_min, tau_max, number_of_rounds=500):
     
@@ -1100,31 +1108,38 @@ def packet_loss_ratio(nodes, rho, tau_min, tau_max, mini_loss, max_loss):
     number_of_rounds=500
     w_erasure=with_erasure(nodes, rho, tau_min, tau_max, number_of_rounds)
     wo_erasure=wo_erasure_code(nodes1, rho, tau_min, tau_max, number_of_rounds)
-    plot_packet_loss(w_erasure, wo_erasure)
+    label1="With Erasure Code"
+    label2="Without Erasure Code"
+    x_axis="Round Number"
+    y_axis="Number of Successful Packets"
+    title='Packet Loss Ratio Over Rounds'
+    plot_packet_loss(w_erasure, wo_erasure, label1, label2, x_axis, y_axis, title)
     print("Packet Success Ratio with Erasure Code: ", w_erasure[-1][1]/((len(nodes)-1)*number_of_rounds))
     print("Packet Success Ratio without Erasure Code: ", wo_erasure[-1][1]/((len(nodes)-1)*number_of_rounds))
-    
-def plot_packet_loss(w_erasure, wo_erasure):
-    rounds1, success1 = zip(*w_erasure)
-    rounds2, success2 = zip(*wo_erasure)
+
+def plot_packet_loss(first_list, second_list, label1, label2, x_axis, y_axis, title):
+    rounds1, success1 = zip(*first_list)
+    rounds2, success2 = zip(*second_list)
     
     plt.figure(figsize=(8, 6))
-    plt.plot(rounds1, success1, linestyle='-', color='b', label='With Erasure Code')
-    plt.plot(rounds2, success2, linestyle='-', color='r', label='Without Erasure Code')
+    plt.plot(rounds1, success1, linestyle='-', color='b', label=label1)
+    plt.plot(rounds2, success2, linestyle='-', color='r', label=label2)
     
-    plt.xlabel('Round Number')
-    plt.ylabel('Number of Successful Packets')
-    plt.title('Packet Loss Ratio Over Rounds')
+    plt.xlabel(x_axis)
+    plt.ylabel(y_axis)
+    plt.title(title)
     
     plt.grid(True)
     plt.legend()
+    #save the plot with the title
+    plt.savefig(title+".png")
     plt.show()
 
 
 # Example of setting up the network, initializing ants, and moving ants
 n = 20              # Number of nodes
 side_length = 200    # Side length of square area of network
-energy = 0.5        # Same energy level for all nodes
+energy = 0.1        # Same energy level for all nodes
 r_min = 40            # Neighbor node range
 r_max = 100*(1)            # Neighbor node range
 num_ants = 100        # Number of ants
@@ -1148,8 +1163,8 @@ plot_graph_static(nodes, path)
 # all_nodes = []
 
     
-packet_loss_ratio(nodes, rho, tau_min, tau_max, 0.1, 0.2)
-# alive_nodes = FDN(nodes, rho, tau_min, tau_max, Elec, epsilon)
+# packet_loss_ratio(nodes, rho, tau_min, tau_max, 0.1, 0.2)
+alive_nodes = FDN(nodes, rho, tau_min, tau_max, Elec, epsilon)
 # alive_nodes = F_Disconnected_N(nodes, rho, tau_min, tau_max, Elec, epsilon)
 # plot_graph(all_nodes,[], show_neighbors=False, interval=1)
 # plot_alive_nodes(alive_nodes)
