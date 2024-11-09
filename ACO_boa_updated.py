@@ -485,7 +485,7 @@ def generate_data_path(source_node, sink_node_id, nodes):
     # Return the final path when we reach the sink node
     return path
 
-def send_data(source_node_id, sink_node_id, nodes, data,size, Elec, epsilon, rho, tau_min, tau_max, trivial=False):
+def send_data(source_node_id, sink_node_id, nodes, data,size, Elec, epsilon, rho, tau_min, tau_max, trivial=False, BOA=False):
     """
     Sends a data packet from source to sink. Uses pheromone levels to decide the next hop
     while considering the packet loss ratio from the loss matrix of the current node.
@@ -548,7 +548,7 @@ def send_data(source_node_id, sink_node_id, nodes, data,size, Elec, epsilon, rho
                 # return sent_packets, temp_path
 
             #Update Energy values
-            update_energy(Elec, epsilon, packet['size'], nodes[packet['current_position']], nodes[next_hop], nodes, rho, tau_min, tau_max)
+            update_energy(Elec, epsilon, packet['size'], nodes[packet['current_position']], nodes[next_hop], nodes, rho, tau_min, tau_max, BOA)
 
             # Update the packet's path and current position
             packet['path'].pop()
@@ -560,7 +560,7 @@ def send_data(source_node_id, sink_node_id, nodes, data,size, Elec, epsilon, rho
     # If it reaches the sink, add it to the received packets list
     #print(f"Packet successfully reached Sink Node {sink_node_id} with data: {packet['data']}")
     # received_packets.append(packet)
-    check_energy_levels(nodes, rho, tau_min, tau_max, trivial)
+    check_energy_levels(nodes, rho, tau_min, tau_max, trivial, BOA)
 
     return dropped, temp_path,
 
@@ -589,7 +589,7 @@ def move_data(packet, nodes):
         #print(f"Packet lost due to high loss ratio from Node {packet['current_position']}.")
         return None  # Packet dropped due to loss
 
-def update_energy(Eelec, epsilon, l, transmiting_node, receiving_node, nodes, rho, tau_min, tau_max):
+def update_energy(Eelec, epsilon, l, transmiting_node, receiving_node, nodes, rho, tau_min, tau_max, BOA=False):
     """
     Calculate the total energy consumption for wireless communication.
     
@@ -621,19 +621,97 @@ def update_energy(Eelec, epsilon, l, transmiting_node, receiving_node, nodes, rh
 
     if(receiving_node.energy<=0):
         receiving_node.energy=0
-        select_new_CH(receiving_node, nodes[1].location)
+        if BOA:
+            select_new_CH_by_BAO(receiving_node, nodes[1].location)
+        else:
+            select_new_CH(receiving_node, nodes[1].location)
         # remove_node(nodes, receiving_node.node_id, rho, tau_min, tau_max)
         
 
     if(transmiting_node.energy<=0):
         transmiting_node.energy=0
-        select_new_CH(transmiting_node, nodes[1].location)
-        # remove_node(nodes, transmiting_node.node_id, rho, tau_min, tau_max)
+        if BOA:
+            select_new_CH_by_BAO(transmiting_node, nodes[1].location)
+        else:
+            select_new_CH(transmiting_node, nodes[1].location)        # remove_node(nodes, transmiting_node.node_id, rho, tau_min, tau_max)
 
     
     return 
 
-def check_energy_levels(nodes, rho, tau_min, tau_max, trivial=False):
+def select_new_CH_by_BAO(node, sink_node_location, max_iterations=10):
+    new_ch_index = -1
+
+    # Initialize fragrance dictionary to store neighbors' fragrances
+    node.fragrances = {i: 0 for i in range(6)}
+    node.cluster_energies[node.curr_CH] = node.energy
+
+    # Calculate initial fitness and fragrance for the node
+    f1 = node.energy  # Residual energy
+    f2 = sum(find_distance(node.location, ch) for ch in node.cluster_locations) / len(node.cluster_locations)
+    f3 = find_distance(node.location, sink_node_location)
+    f4 = 6
+    f5 = np.sqrt(sum(find_distance(node.location, n) ** 2 for n in node.cluster_locations) / f4)
+
+    # Combined fitness (f) as per Eq. (12)
+    node.fitness = delta1 * f1 + delta2 * f2 + delta3 * f3 + delta4 * f4 + delta5 * f5
+    node.fragrance = sensory_modality * (node.fitness ** power_exponent)
+
+    # Calculate and store fragrance for each neighbor
+    for i in range(6):
+        neighbor_fitness = delta1 * f1 + delta2 * f2 + delta3 * f3 + delta4 * f4 + delta5 * f5
+        node.fragrances[i] = sensory_modality * (neighbor_fitness ** power_exponent)
+
+    # Main BOA loop for updating virtual positions
+    for t in range(max_iterations):
+        # Determine the best neighbor in the neighborhood (node and neighbors)
+        best_neighbor =-1
+        best_fragrance = 0
+        for i in range(6):
+            if node.fragrances[i] > best_fragrance and i!=node.curr_CH:
+                best_fragrance = node.fragrances[i]
+                best_neighbor=i
+        g_star = node.cluster_locations[best_neighbor]
+        if best_neighbor==-1:
+            remove_fully_dead_cluster(node, nodes)
+            return
+
+        r = random.random()
+        if r < switch_probability:  # Global search phase
+            node.virtual_position = node.location + r * (find_distance(g_star, node.location)) * node.fragrance
+        else:  # Local search phase
+            if len(node.neighbors) >= 2:
+                j, k = random.sample(node.cluster_locations, 2)
+                node.virtual_position = node.location + r * (find_distance(j, k)) * node.fragrance
+
+        # Recalculate fitness and fragrance after position update
+        f1 = node.energy  # Residual energy
+        f2 = sum(find_distance(node.location, ch) for ch in node.cluster_locations) / len(node.cluster_locations)
+        f3 = find_distance(node.location, sink_node_location)
+        f4 = 6
+        f5 = np.sqrt(sum(find_distance(node.location, n) ** 2 for n in node.cluster_locations) / f4)
+        # Skip updating fragrance if energy is zero
+        if node.energy == 0:
+            continue
+        
+        node.fitness = delta1 * f1 + delta2 * f2 + delta3 * f3 + delta4 * f4 + delta5 * f5
+        node.fragrance = sensory_modality * (node.fitness ** power_exponent)
+        
+        for i in range(6):
+            neighbor_fitness = delta1 * f1 + delta2 * f2 + delta3 * f3 + delta4 * f4 + delta5 * f5
+            node.fragrances[i] = sensory_modality * (neighbor_fitness ** power_exponent)
+        
+        # Select the best node based on fragrance and update CH if fragrance is higher
+        for i in range(6):
+            if node.fragrances[i] > node.fragrance and  i!=node.curr_CH :
+                node.fragrance = node.fragrances[i]
+                node.location = node.cluster_locations[i]
+                node.energy = node.cluster_energies[i]
+                node.curr_CH = i
+
+    return node
+
+
+def check_energy_levels(nodes, rho, tau_min, tau_max, trivial=False, BOA=False):
     """
     This function checks the energy levels of the current CH of each node in the cluster.
     If the CH's energy is less than half of the average energy of the cluster, it selects a new CH.
@@ -648,8 +726,10 @@ def check_energy_levels(nodes, rho, tau_min, tau_max, trivial=False):
         # Check if the current CH's energy is less than half of the average cluster energy
         if curr_ch_energy < (0.5 * avg_cluster_energy):
             # Select a new CH
-
-            select_new_CH(node, nodes[1].location)
+            if BOA:
+                select_new_CH_by_BAO(node, nodes[1].location)
+            else:
+                select_new_CH(node, nodes[1].location)
             # for node in nodes:
             #     establish_route(node.node_id, 1, nodes, rho,tau_min,tau_max, trivial)
             # path=generate_data_path(source_node, sink_node.node_id,nodes)
@@ -1072,7 +1152,7 @@ def ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop):
     
     return alive_nodes, packet_loss_ratio
 
-def trivial_ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop):
+def BOA_ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop):
     alive_nodes=[]
     packet_loss_ratio=[]
     sink_node=nodes[1]
@@ -1091,7 +1171,7 @@ def trivial_ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_lo
         loop+=1
         for node in nodes:
             if node.node_id != 1 and node.energy>0:
-                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, None, 400, Elec, epsilon, rho, tau_min, tau_max, True)
+                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, None, 400, Elec, epsilon, rho, tau_min, tau_max, True, True)
                 if(dropped==0):
                     success+=1
                     
@@ -1127,20 +1207,20 @@ def trivial_ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_lo
 
 def FDN(nodes, rho, tau_min, tau_max, Elec, epsilon):
     nodes1=copy.deepcopy(nodes)
-    max_loop=5000
+    max_loop=2000
     aco_network_life, aco_packet_loss=ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop)
-    trivial_aco_network_life, trivial_aco_packet_loss=trivial_ACO_network_life(nodes1, rho, tau_min, tau_max, Elec, epsilon, max_loop)
+    trivial_aco_network_life, trivial_aco_packet_loss=BOA_ACO_network_life(nodes1, rho, tau_min, tau_max, Elec, epsilon, max_loop)
     label1="ACO Network Life"
-    label2="Trivial ACO Network Life"
+    label2="BOA ACO Network Life"
     x_axis="Round Number"
     y_axis="Number of Alive Nodes"
-    title='ACO Network Life vs Trivial ACO Network Life'
+    title='ACO Network Life vs BOA ACO Network Life'
     plot_packet_loss(aco_network_life, trivial_aco_network_life, label1, label2, x_axis, y_axis, title)
     label1="# of ACO Packet Received"
-    label2="#of Trivial ACO Packet Received"
+    label2="#of BOA ACO Packet Received"
     x_axis="Round Number"
     y_axis="Number of Successful Packets"
-    title='# of ACO Packet Received vs # of Trivial ACO Packet Received'
+    title='# of ACO Packet Received vs # of BOA ACO Packet Received'
     plot_packet_loss(aco_packet_loss, trivial_aco_packet_loss, label1, label2, x_axis, y_axis, title)
 
 def with_erasure(nodes, rho,tau_min, tau_max, number_of_rounds=500):
