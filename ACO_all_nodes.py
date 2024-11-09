@@ -649,8 +649,8 @@ def check_energy_levels(nodes, rho, tau_min, tau_max, trivial=False):
             # Select a new CH
 
             select_new_CH(node, nodes[1].location)
-            for node in nodes:
-                establish_route(node.node_id, 1, nodes, rho,tau_min,tau_max, trivial)
+            # for node in nodes:
+            #     establish_route(node.node_id, 1, nodes, rho,tau_min,tau_max, trivial)
             # path=generate_data_path(source_node, sink_node.node_id,nodes)
             # #print(path)
             # all_paths.append(path)  # Store the current path
@@ -1034,11 +1034,11 @@ def ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop):
     counter=100
     success=0
     all_sent=[]
-    while (counter>20 and loop<max_loop):
+    while (counter>12 and loop<max_loop):
         loop+=1
         for node in nodes:
             if node.node_id != 1 and node.energy>0:
-                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, None, 4000, Elec, epsilon, rho, tau_min, tau_max)
+                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, None, 400, Elec, epsilon, rho, tau_min, tau_max)
                 if dropped==0:
                     success+=1
                 # all_sent.append(opti_path)
@@ -1057,6 +1057,12 @@ def ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop):
                         counter+=1
                 total+=counter
         
+        if((loop % 200 )==1):
+            for node in nodes:
+                if node.node_id != 1:
+                    for i in range(5):
+                        establish_route(node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max)
+
         if((loop%1000 )== 1):
             print("alive: ", counter, "loop: ", loop)
             priint_energies(nodes)
@@ -1080,11 +1086,11 @@ def trivial_ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_lo
     counter=100
     success=0
     all_sent=[]
-    while (counter>20 and loop<max_loop):
+    while (counter>12 and loop<max_loop):
         loop+=1
         for node in nodes:
             if node.node_id != 1 and node.energy>0:
-                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, None, 4000, Elec, epsilon, rho, tau_min, tau_max, True)
+                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, None, 400, Elec, epsilon, rho, tau_min, tau_max, True)
                 if(dropped==0):
                     success+=1
                     
@@ -1104,6 +1110,12 @@ def trivial_ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_lo
                         counter+=1
                 total+=counter
         
+        if((loop % 200 )==1):
+            for node in nodes:
+                if node.node_id != 1:
+                    for i in range(5):
+                        establish_route(node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max, True)
+
         if((loop%1000 )== 1):
             print("alive: ", counter, "loop: ", loop)
             priint_energies(nodes)
@@ -1114,7 +1126,7 @@ def trivial_ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_lo
 
 def FDN(nodes, rho, tau_min, tau_max, Elec, epsilon):
     nodes1=copy.deepcopy(nodes)
-    max_loop=2000
+    max_loop=5000
     aco_network_life, aco_packet_loss=ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop)
     trivial_aco_network_life, trivial_aco_packet_loss=trivial_ACO_network_life(nodes1, rho, tau_min, tau_max, Elec, epsilon, max_loop)
     label1="ACO Network Life"
@@ -1123,11 +1135,11 @@ def FDN(nodes, rho, tau_min, tau_max, Elec, epsilon):
     y_axis="Number of Alive Nodes"
     title='ACO Network Life vs Trivial ACO Network Life'
     plot_packet_loss(aco_network_life, trivial_aco_network_life, label1, label2, x_axis, y_axis, title)
-    label1="ACO Packet Loss"
-    label2="Trivial ACO Packet Loss"
+    label1="# of ACO Packet Received"
+    label2="#of Trivial ACO Packet Received"
     x_axis="Round Number"
     y_axis="Number of Successful Packets"
-    title='ACO Packet Loss vs Trivial ACO Packet Loss'
+    title='# of ACO Packet Received vs # of Trivial ACO Packet Received'
     plot_packet_loss(aco_packet_loss, trivial_aco_packet_loss, label1, label2, x_axis, y_axis, title)
 
 def with_erasure(nodes, rho,tau_min, tau_max, number_of_rounds=500):
@@ -1216,17 +1228,17 @@ def plot_packet_loss(first_list, second_list, label1, label2, x_axis, y_axis, ti
 
 # Example of setting up the network, initializing ants, and moving ants
 n = 20              # Number of nodes
-side_length = 200    # Side length of square area of network
+side_length = 500    # Side length of square area of network
 energy = 0.1        # Same energy level for all nodes
-r_min = 40            # Neighbor node range
-r_max = 100*(1)            # Neighbor node range
+r_min = 100            # Neighbor node range
+r_max = 250*(1)            # Neighbor node range
 num_ants = 100        # Number of ants
 initial_pheromone=10.0
 rho = 0.1
 tau_max = 40
 tau_min = 2
 Elec = 50*(10**(-9))
-epsilon = 0.00131*10**(-12)
+epsilon = 0.00131*(10**(-12))
 
 
 # Generate nodes
