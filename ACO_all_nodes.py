@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import math
 import copy
+import pickle
 import matplotlib.animation as animation
 
 all_nodes = []
@@ -1241,8 +1242,17 @@ Elec = 50*(10**(-9))
 epsilon = 0.00131*(10**(-12))
 
 
+
+with open('network_structure_nodes_1.pkl', 'rb') as file:
+    nodes = pickle.load(file)
+
 # Generate nodes
-nodes = initialize_nodes(n,side_length, r_min, r_max,energy, num_ants, initial_pheromone)
+# nodes = initialize_nodes(n,side_length, r_min, r_max,energy, num_ants, initial_pheromone)
+
+# with open('network_structure_nodes.pkl', 'wb') as file:
+#     pickle.dump(nodes, file)
+
+
 main_source_node=nodes[0]
 main_sink_node=nodes[1]
 path=[]
