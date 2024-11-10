@@ -173,6 +173,7 @@ draw_graph()
 
 # Create animation
 ani = animation.FuncAnimation(fig, update_ant_position, frames=total_frames, interval=200)
+ani.save("aco_send_data.gif", writer="pillow", fps=10)
 
 plt.show()
 
