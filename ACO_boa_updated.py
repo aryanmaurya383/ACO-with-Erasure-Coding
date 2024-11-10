@@ -1208,8 +1208,8 @@ def BOA_ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop):
 def FDN(nodes, rho, tau_min, tau_max, Elec, epsilon):
     nodes1=copy.deepcopy(nodes)
     max_loop=2000
-    aco_network_life, aco_packet_loss=ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop)
     trivial_aco_network_life, trivial_aco_packet_loss=BOA_ACO_network_life(nodes1, rho, tau_min, tau_max, Elec, epsilon, max_loop)
+    aco_network_life, aco_packet_loss=ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop)
     label1="ACO Network Life"
     label2="BOA ACO Network Life"
     x_axis="Round Number"
