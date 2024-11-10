@@ -930,15 +930,16 @@ def plot_graph_static(nodes, path1, path2=[], show_neighbors=True, show_child=Tr
     # Plot the nodes
     for i, node in enumerate(nodes):
         x, y = node.location
-        if i == 0:  # Source node
-            plt.scatter(x, y, color='blue', s=100, label='Source' if i == 0 else "")  # Blue for source
-        elif i == 1:  # Sink node
-            plt.scatter(x, y, color='green', s=100, label='Sink' if i == 1 else "")  # Green for sink
+        if i == 1:  # Sink node
+            plt.scatter(x, y, color='blue', s=100, label='Sink' if i == 1 else "")  # Green for sink
+        elif i==2:
+            plt.scatter(x, y, color='red', s=100, label='Cluster Head')  # Red for all other nodes
         else:
             plt.scatter(x, y, color='red', s=100)  # Red for all other nodes
         # Add labels to the nodes (node_id)
         plt.text(x , y, f'{node.node_id}', fontsize=12)
 
+    
     # Plot the path in green
     for k in range(len(path1) - 1):
         node1 = nodes[path1[k]]     # Current node
@@ -1035,12 +1036,12 @@ def ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop):
     counter=100
     success=0
     all_sent=[]
-    while (counter>12 and loop<max_loop):
+    while (counter>20 and loop<max_loop):
         loop+=1
         for node in nodes:
             if node.node_id != 1 and node.energy>0:
-                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, None, 400, Elec, epsilon, rho, tau_min, tau_max)
-                if dropped==0:
+                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, 15, 400, Elec, epsilon, rho, tau_min, tau_max)
+                if dropped<=5:
                     success+=1
                 # all_sent.append(opti_path)
                 # if (loop %1000 )==1 and loop>1000:
@@ -1087,11 +1088,11 @@ def trivial_ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_lo
     counter=100
     success=0
     all_sent=[]
-    while (counter>12 and loop<max_loop):
+    while (counter>20 and loop<max_loop):
         loop+=1
         for node in nodes:
             if node.node_id != 1 and node.energy>0:
-                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, None, 400, Elec, epsilon, rho, tau_min, tau_max, True)
+                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, 10, 400, Elec, epsilon, rho, tau_min, tau_max, True)
                 if(dropped==0):
                     success+=1
                     
@@ -1109,7 +1110,7 @@ def trivial_ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_lo
                     mini=min(mini,energy)
                     if energy>0:
                         counter+=1
-                total+=counter
+                # total+=counter
         
         if((loop % 200 )==1):
             for node in nodes:
@@ -1125,18 +1126,26 @@ def trivial_ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_lo
     
     return alive_nodes, packet_loss_ratio
 
-def FDN(nodes, rho, tau_min, tau_max, Elec, epsilon):
+def FDN(nodes, rho, tau_min, tau_max, Elec, epsilon, mini_loss, max_loss):
+    loss_matrix=np.random.rand(len(nodes),len(nodes)) 
+    for i in range(len(nodes)):
+        for j in range(len(nodes)):
+            loss_matrix[i][j]=loss_matrix[i][j]*(max_loss-mini_loss)+mini_loss
+            loss_matrix[j][i]=loss_matrix[i][j]
+    for node in nodes:
+        node.loss_matrix=loss_matrix
+
     nodes1=copy.deepcopy(nodes)
     max_loop=5000
     aco_network_life, aco_packet_loss=ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop)
     trivial_aco_network_life, trivial_aco_packet_loss=trivial_ACO_network_life(nodes1, rho, tau_min, tau_max, Elec, epsilon, max_loop)
-    label1="ACO Network Life"
+    label1="EC-ACO Network Life"
     label2="Trivial ACO Network Life"
     x_axis="Round Number"
     y_axis="Number of Alive Nodes"
     title='ACO Network Life vs Trivial ACO Network Life'
     plot_packet_loss(aco_network_life, trivial_aco_network_life, label1, label2, x_axis, y_axis, title)
-    label1="# of ACO Packet Received"
+    label1="# of EC-ACO Packet Received"
     label2="#of Trivial ACO Packet Received"
     x_axis="Round Number"
     y_axis="Number of Successful Packets"
@@ -1162,6 +1171,13 @@ def with_erasure(nodes, rho,tau_min, tau_max, number_of_rounds=500):
                 dropped, opti_path = send_data(node.node_id, 1, nodes, 15, 400, Elec, epsilon, rho, tau_min, tau_max)
                 if(dropped<=5):
                     success+=1
+        
+        if((loop % 200 )==1):
+            for node in nodes:
+                if node.node_id != 1:
+                    for i in range(5):
+                        establish_route(node.node_id, 1, nodes, rho, tau_min, tau_max)
+
         erasure_code.append((loop, success))
     
     return erasure_code
@@ -1180,6 +1196,11 @@ def wo_erasure_code(nodes, rho,tau_min, tau_max, number_of_rounds=500):
                 dropped, opti_path = send_data(node.node_id, 1, nodes, 10, 400, Elec, epsilon, rho, tau_min, tau_max)
                 if(dropped==0):
                     success+=1
+        if((loop % 200 )==1):
+            for node in nodes:
+                if node.node_id != 1:
+                    for i in range(5):
+                        establish_route(node.node_id, 1, nodes, rho, tau_min, tau_max)
         wo_erasure_code.append((loop, success))
 
     return wo_erasure_code
@@ -1199,14 +1220,14 @@ def packet_loss_ratio(nodes, rho, tau_min, tau_max, mini_loss, max_loss):
     number_of_rounds=500
     w_erasure=with_erasure(nodes, rho, tau_min, tau_max, number_of_rounds)
     wo_erasure=wo_erasure_code(nodes1, rho, tau_min, tau_max, number_of_rounds)
-    label1="With Erasure Code"
-    label2="Without Erasure Code"
+    label1="EC-ACO"
+    label2="ECOCR"
     x_axis="Round Number"
     y_axis="Number of Successful Packets"
     title='Packet Loss Ratio Over Rounds'
     plot_packet_loss(w_erasure, wo_erasure, label1, label2, x_axis, y_axis, title)
-    print("Packet Success Ratio with Erasure Code: ", w_erasure[-1][1]/((len(nodes)-1)*number_of_rounds))
-    print("Packet Success Ratio without Erasure Code: ", wo_erasure[-1][1]/((len(nodes)-1)*number_of_rounds))
+    print("Data Success Ratio with EC-ACO: ", w_erasure[-1][1]/((len(nodes)-1)*number_of_rounds))
+    print("Data Success Ratio ECOCR: ", wo_erasure[-1][1]/((len(nodes)-1)*number_of_rounds))
 
 def plot_packet_loss(first_list, second_list, label1, label2, x_axis, y_axis, title):
     rounds1, success1 = zip(*first_list)
@@ -1230,7 +1251,7 @@ def plot_packet_loss(first_list, second_list, label1, label2, x_axis, y_axis, ti
 # Example of setting up the network, initializing ants, and moving ants
 n = 20              # Number of nodes
 side_length = 500    # Side length of square area of network
-energy = 0.1        # Same energy level for all nodes
+energy = 0.5        # Same energy level for all nodes
 r_min = 100            # Neighbor node range
 r_max = 250*(1)            # Neighbor node range
 num_ants = 100        # Number of ants
@@ -1243,11 +1264,11 @@ epsilon = 0.00131*(10**(-12))
 
 
 
-with open('network_structure_nodes_1.pkl', 'rb') as file:
-    nodes = pickle.load(file)
+# with open('network_structure_nodes_1.pkl', 'rb') as file:
+#     nodes = pickle.load(file)
 
 # Generate nodes
-# nodes = initialize_nodes(n,side_length, r_min, r_max,energy, num_ants, initial_pheromone)
+nodes = initialize_nodes(n,side_length, r_min, r_max,energy, num_ants, initial_pheromone)
 
 # with open('network_structure_nodes.pkl', 'wb') as file:
 #     pickle.dump(nodes, file)
@@ -1263,8 +1284,8 @@ plot_graph_static(nodes, path)
 # all_nodes = []
 
     
-# packet_loss_ratio(nodes, rho, tau_min, tau_max, 0.1, 0.2)
-alive_nodes = FDN(nodes, rho, tau_min, tau_max, Elec, epsilon)
+# packet_loss_ratio(nodes, rho, tau_min, tau_max, 0, 0.2)
+alive_nodes = FDN(nodes, rho, tau_min, tau_max, Elec, epsilon, 0, 0.2)
 # alive_nodes = F_Disconnected_N(nodes, rho, tau_min, tau_max, Elec, epsilon)
 # plot_graph(all_nodes,[], show_neighbors=False, interval=1)
 # plot_alive_nodes(alive_nodes)
