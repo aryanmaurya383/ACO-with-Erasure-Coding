@@ -1040,7 +1040,7 @@ def ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop):
         loop+=1
         for node in nodes:
             if node.node_id != 1 and node.energy>0:
-                node.energy-=10*(10**(-9))
+                node.energy-=10*(10**(-8))
                 dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, 12, 400, Elec, epsilon, rho, tau_min, tau_max)
                 if dropped<=2:
                     success+=1
@@ -1169,8 +1169,8 @@ def with_erasure(nodes, rho,tau_min, tau_max, number_of_rounds=500):
             print("Loop: ", loop)
         for node in nodes:
             if node.node_id != 1:
-                dropped, opti_path = send_data(node.node_id, 1, nodes, 120, 40, Elec, epsilon, rho, tau_min, tau_max)
-                if(dropped<=20):
+                dropped, opti_path = send_data(node.node_id, 1, nodes, 12, 400, Elec, epsilon, rho, tau_min, tau_max)
+                if(dropped<=2):
                     success+=1
         
         if((loop % 200 )==1):
@@ -1194,7 +1194,7 @@ def wo_erasure_code(nodes, rho,tau_min, tau_max, number_of_rounds=500):
             print("Loop: ", loop)
         for node in nodes:
             if node.node_id != 1:
-                dropped, opti_path = send_data(node.node_id, 1, nodes, 100, 40, Elec, epsilon, rho, tau_min, tau_max)
+                dropped, opti_path = send_data(node.node_id, 1, nodes, 10, 400, Elec, epsilon, rho, tau_min, tau_max)
                 if(dropped==0):
                     success+=1
         if((loop % 200 )==1):
@@ -1285,7 +1285,7 @@ plot_graph_static(nodes, path)
 # all_nodes = []
 
     
-# packet_loss_ratio(nodes, rho, tau_min, tau_max, 0, 0.2)
+# packet_loss_ratio(nodes, rho, tau_min, tau_max, 0, 0.1)
 alive_nodes = FDN(nodes, rho, tau_min, tau_max, Elec, epsilon, 0, 0.1)
 # alive_nodes = F_Disconnected_N(nodes, rho, tau_min, tau_max, Elec, epsilon)
 # plot_graph(all_nodes,[], show_neighbors=False, interval=1)
