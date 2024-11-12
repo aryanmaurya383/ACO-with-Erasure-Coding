@@ -775,6 +775,8 @@ def select_new_CH(node, sink_node_location):
     #All nodes have energy zero
     else:
         remove_fully_dead_cluster(node, nodes)
+    all_nodes.append(copy.deepcopy(nodes))  # Store the current state of nodes
+    all_paths.append(generate_data_path(nodes[0],1,nodes))  # Store the current state of nodes
 
 
 def plot_graph(all_nodes, all_paths, show_neighbors=True, show_child=True, interval=5):
@@ -785,7 +787,7 @@ def plot_graph(all_nodes, all_paths, show_neighbors=True, show_child=True, inter
         ax.clear()  # Clear the previous frame
         if frame < len(all_nodes):
             nodes = all_nodes[frame]  # Get the current state of nodes
-            # path1 = all_paths[frame]   # Get the current path
+            path1 = all_paths[frame]   # Get the current path
         else:
             return
 
@@ -812,13 +814,14 @@ def plot_graph(all_nodes, all_paths, show_neighbors=True, show_child=True, inter
                 for index, child in enumerate (node.cluster_locations):
                     x, y = child   # Child's coordinates
                     plt.scatter(x, y, color='purple', s=50)  # Red for all other nodes
-                    plt.text(x+1 , y+1, f'{node.cluster_energies[index]}', fontsize=8)
+                    # print upto 2 decimal
+                    plt.text(x+1 , y+1, f'{node.cluster_energies[index]:.2f}', fontsize=8)
 
         # Plot the nodes
         for i, node in enumerate(nodes):
             x, y = node.location
             if i == 0:  # Source node
-                ax.scatter(x, y, color='blue', s=100, label='Source' if i == 0 else "")  # Blue for source
+                ax.scatter(x, y, color='red', s=100, label='Cluster Heads' if i == 0 else "")  # Blue for source
             elif i == 1:  # Sink node
                 ax.scatter(x, y, color='green', s=100, label='Sink' if i == 1 else "")  # Green for sink
             else:
@@ -827,13 +830,16 @@ def plot_graph(all_nodes, all_paths, show_neighbors=True, show_child=True, inter
             ax.text(x, y, f'{node.node_id}', fontsize=12)
 
         # # Plot the path1 in green
-        # for k in range(len(path1) - 1):
-        #     node1 = nodes[path1[k]]     # Current node
-        #     node2 = nodes[path1[k + 1]] # Next node in the path
-        #     x1, y1 = node1.location
-        #     x2, y2 = node2.location
-        #     # Plot a green edge between adjacent nodes in the path
-        #     ax.plot([x1, x2], [y1, y2], color='green', linestyle='-', linewidth=2)
+        for k in range(len(path1) - 1):
+            node1 = nodes[path1[k]]     # Current node
+            node2 = nodes[path1[k + 1]] # Next node in the path
+            x1, y1 = node1.location
+            x2, y2 = node2.location
+            # Plot a green edge between adjacent nodes in the path
+            if(frame==0 and k==0):
+                ax.plot([x1, x2], [y1, y2], color='blue', linestyle='-', linewidth=2, label="Optimal Path")
+            else:
+                ax.plot([x1, x2], [y1, y2], color='blue', linestyle='-', linewidth=2)
 
         # Set plot labels and title
         ax.set_xlabel("X")
@@ -848,7 +854,8 @@ def plot_graph(all_nodes, all_paths, show_neighbors=True, show_child=True, inter
 
     # Create the animation
     ani = animation.FuncAnimation(fig, update, frames=len(all_nodes), interval=interval, repeat=False)
-
+    print("Saving animation demo...")
+    # ani.save('Path changing demo2.gif', writer='pillow', fps=5)
     # Show the animation
     plt.show()
 
@@ -1286,9 +1293,10 @@ plot_graph_static(nodes, path)
 
     
 # packet_loss_ratio(nodes, rho, tau_min, tau_max, 0, 0.1)
-alive_nodes = FDN(nodes, rho, tau_min, tau_max, Elec, epsilon, 0, 0.1)
+ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, 5000)
+# alive_nodes = FDN(nodes, rho, tau_min, tau_max, Elec, epsilon, 0, 0.1)
 # alive_nodes = F_Disconnected_N(nodes, rho, tau_min, tau_max, Elec, epsilon)
-# plot_graph(all_nodes,[], show_neighbors=False, interval=1)
+plot_graph(all_nodes[:100],all_paths[:100], show_neighbors=False, interval=1)
 # plot_alive_nodes(alive_nodes)
 
 
