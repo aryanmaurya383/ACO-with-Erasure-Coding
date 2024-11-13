@@ -59,8 +59,8 @@ class Node:
         Generates one ant if the node has not yet reached its max_num_ants.
         Updates the internal list of ants and increments the generated_ants_count.
 
-        :param source_node: The ID of the source node where the ant is generated.
-        :param sink_node: The ID of the sink node (destination).
+        :param source_node: The source node where the ant is generated.
+        :param sink_node_id: The ID of the sink node (destination).
         :param pheromone_matrix: The pheromone matrix that will be copied to the ant.
         """
         # Only generate an ant if the count is less than max_num_ants
@@ -75,7 +75,6 @@ class Node:
             # Increment the count of generated ants
             self.generated_ants_count += 1
             
-            #print(f"Ant {new_ant.ant_id} generated at Node {self.node_id}.")
         else:
             print(f"Node {self.node_id} has reached the max number of ants.")
     
@@ -112,14 +111,14 @@ class Node:
 class Ant:
     def __init__(self, ant_id, source_node_id, sink_node_id, pheromone_matrix):
         self.ant_id = ant_id                        # Unique ID of the ant
-        self.source_node_id = source_node_id              # Source node of the ant
-        self.sink_node_id = sink_node_id                  # Destination node (sink)
-        self.visited_nodes = [source_node_id]          # List of nodes visited, starting from the source
-        self.current_position = source_node_id         # Current position (initially at source)
+        self.source_node_id = source_node_id        # Source node of the ant
+        self.sink_node_id = sink_node_id            # Destination node (sink)
+        self.visited_nodes = [source_node_id]       # List of nodes visited, starting from the source
+        self.current_position = source_node_id      # Current position (initially at source)
         self.distance_traveled = 0.0                # Total distance traveled
         self.curr_back_index=-1                     # Used in back ant how much path retraced
         self.is_back_ant = False                    # Indicates if the ant is retracing its path (True if retracing)
-        self.dropped = False
+        self.dropped = False                        # Indicates if the ant has reached a dead end
         self.pheromone_matrix = [row[:] for row in pheromone_matrix]  # Copy of the source node's pheromone matrix
 
 
@@ -140,13 +139,10 @@ class Ant:
                 # Move to the previous node in the visited path
                 self.curr_back_index -= 1
                 self.current_position = prev_node_id
-                
-                #print(f"Back Ant {self.ant_id} moved to node {self.current_position}, total distance: {self.distance_traveled}")
-            
+                            
             else:
                 # If current back index is 0, it means we've reached the source node
-                #print(f"Ant {self.ant_id} has reached the source node while retracing.")
-                return  # Ant has finished its journey back to the source
+                return
 
         else:
             # Calculate next hop using probabilities during forward movement
@@ -162,7 +158,6 @@ class Ant:
 
             if next_hop == self.sink_node_id:
                 self.start_backtracking()
-                #print(f"Ant {self.ant_id} reached the Sink Node {self.sink_node_id}. Backtracking started.")
 
             current_node = nodes[self.current_position]
             self.distance_traveled += euclidean_distance(current_node, nodes[next_hop])
@@ -171,9 +166,7 @@ class Ant:
     def start_backtracking(self):
         self.is_back_ant = True
         self.curr_back_index=len(self.visited_nodes)-1
-        #print(f"Ant {self.ant_id} is now retracing its path back to the source.")
 
-# Function to evaporate pheromones for all neighbors of a node, excluding visited nodes
 def evaporate_pheromones(source_node, rho, tau_min):
     """
     Evaporates pheromone levels for all the pheromone matrix entries stored in the source node.
@@ -199,9 +192,6 @@ def evaporate_pheromones(source_node, rho, tau_min):
 
             # Update the pheromone value in the matrix
             source_node.pheromone_matrix[i][j] = new_tau_ij
-
-            # #print updated pheromone information for debugging
-            #print(f"Pheromone evaporated between Node {i} and Node {j}: {tau_ij} -> {new_tau_ij}")
 
 def add_pheromone_from_ants(source_node, sink_node, tau_max):
     """
@@ -311,6 +301,7 @@ def get_eta(current_node, neighbor_node, source_node, sink_node, m):
     
     :param current_node: The node where the ant is currently located.
     :param neighbor_node: The neighbor node being evaluated.
+    :param source_node: The source node (source of the ant).
     :param sink_node: The sink node (destination of the ant).
     :param m: Weight factor for distance calculation.
     
@@ -327,7 +318,6 @@ def get_eta(current_node, neighbor_node, source_node, sink_node, m):
     max_neighbors = max([node.num_neighbors for node in nodes])  # Max neighbors across all nodes
     
     eta = 5*(dist_source_sink / (m * dist_i_j + (1 - m) * dist_j_sink)) * (energy_ratio) * ((neighbor_node.num_neighbors / max_neighbors)**0.5)
-    #print(eta, "hehee")
     return eta
 
 def get_trivial_eta(current_node, neighbor_node):
@@ -335,9 +325,6 @@ def get_trivial_eta(current_node, neighbor_node):
     eta=1/dist_i_j
     return eta
 
-
-
-# Function to calculate the probability list for choosing the next hop
 def get_next_hop_probabilities(node, ant, nodes, alpha, beta, m, trivial=False):
     """
     This function calculates the probability list for choosing the next hop for an ant.
@@ -349,6 +336,7 @@ def get_next_hop_probabilities(node, ant, nodes, alpha, beta, m, trivial=False):
     :param alpha: The importance of pheromone (pheromone influence).
     :param beta: The importance of eta (visibility).
     :param m: Weight factor for eta calculation.
+    :param trivial: Flag to use trivial eta calculation (default is False).
     :return: A list of tuples (neighbor_id, probability) for each neighbor.
     """
     pheromones = []
@@ -371,26 +359,17 @@ def get_next_hop_probabilities(node, ant, nodes, alpha, beta, m, trivial=False):
             pheromones.append(pheromone_level ** alpha)  # Pheromone influence
             etas.append(eta_value ** beta)               # Eta influence
             valid_neighbors.append(neighbor_id)          # Add valid neighbor ID
-        # else:
-        #     pheromones.append(0)  # No pheromone for visited nodes
-        #     etas.append(0)        # No eta for visited nodes
 
     # Compute the product of pheromone influence and eta for each neighbor
     combined_influences = [pheromones[i] * etas[i] for i in range(len(pheromones))]
 
     total_influence = sum(combined_influences)
-    #print(total_influence)
-    #print("aryan")
     # If the total influence is zero, return zero probabilities
     if total_influence == 0:
         return [(neighbor_id, 0) for neighbor_id in valid_neighbors]
     
     # Calculate the probability for each neighbor
     probabilities = [(valid_neighbors[i], combined_influences[i] / total_influence) for i in range(len(valid_neighbors))]
-    #print(probabilities)
-    #print(etas)
-    #print(pheromones)
-    #print("maurya")
     return probabilities
 
 # Function to select the next hop based on the probability distribution and return the next node ID
@@ -400,7 +379,6 @@ def choose_next_hop(probability_list):
     
     :param probability_list: A list of tuples (neighbor_id, probability) where each entry represents 
                              a neighbor node and the probability of selecting that neighbor.
-    
     :return: The node ID of the chosen neighbor.
     """
     neighbors = [neighbor_id for neighbor_id, _ in probability_list]
@@ -418,9 +396,11 @@ def establish_route(source_node_id, sink_node_id,  nodes, rho, tau_min, tau_max,
     
     :param source_node_id: ID of the source node
     :param sink_node_id: ID of the sink node
-    :param k_ants: Number of ants to generate
     :param nodes: List of all nodes in the network
-    :param moves_per_generation: Number of moves each ant takes before new ants are generated
+    :param rho: Evaporation rate
+    :param tau_min: Minimum pheromone level
+    :param tau_max: Maximum pheromone level
+    :param trivial: Flag to use trivial eta calculation (default is False)
     """
     # initialize_ants(source_node_id, nodes, sink_node_id)
 
@@ -432,9 +412,6 @@ def establish_route(source_node_id, sink_node_id,  nodes, rho, tau_min, tau_max,
     # Move each ant 
     for ant in nodes[source_node_id].ants:
         while ant.curr_back_index!=0 and not ant.dropped:
-            #print("aryan")
-            #print(ant.curr_back_index)
-            #print(ant.visited_nodes)
             ant.move_ant(nodes, trivial)
     
     #When all ants reach the source node then update pheromone and remove ants
@@ -451,7 +428,6 @@ def generate_data_path(source_node, sink_node_id, nodes):
     :param source_node: The starting node (source) for the path.
     :param sink_node_id: The ID of the sink node (destination).
     :param nodes: The list of all nodes in the network.
-    
     :return: A list of node IDs representing the path from source to sink based on the highest pheromone levels.
     """
     current_node_id = source_node.node_id  # Start from the source node
@@ -472,20 +448,16 @@ def generate_data_path(source_node, sink_node_id, nodes):
                 next_node_id = neighbor_id
 
         if next_node_id is None:
-            #print("Error: No path found with pheromone levels leading to the sink node.")
             return path  # If no next node is found, return the path constructed so far
         
         # Add the next node with the highest pheromone to the path
         path.append(next_node_id)
         current_node_id = next_node_id
         
-        # Debug #print statement
-        #print(f"Moving to Node {next_node_id} with pheromone level {max_pheromone}")
-    
     # Return the final path when we reach the sink node
     return path
 
-def send_data(source_node_id, sink_node_id, nodes, data,size, Elec, epsilon, rho, tau_min, tau_max, trivial=False):
+def send_data(source_node_id, sink_node_id, nodes, data, size, Elec, epsilon, rho, tau_min, tau_max, trivial=False):
     """
     Sends a data packet from source to sink. Uses pheromone levels to decide the next hop
     while considering the packet loss ratio from the loss matrix of the current node.
@@ -494,8 +466,13 @@ def send_data(source_node_id, sink_node_id, nodes, data,size, Elec, epsilon, rho
     :param sink_node_id: ID of the sink node
     :param nodes: List of all nodes in the network
     :param data: The data to be sent in the packet
+    :param size: The size of data packet
     :param Elec: Transmission energy
     :param epsilon: Amplification energy
+    :param rho: Evaporation rate
+    :param tau_min: Minimum pheromone level
+    :param tau_max: Maximum pheromone level
+    :param trivial: Flag to use trivial eta calculation (default is False)
     """
     if(data==None):
         data=1
@@ -506,9 +483,7 @@ def send_data(source_node_id, sink_node_id, nodes, data,size, Elec, epsilon, rho
     # Initialize the data packet with source, sink, current position, path, and the data field.
     optimal_path=generate_data_path(nodes[source_node_id], sink_node_id, nodes)
     temp_path =copy.deepcopy(optimal_path)
-    # if(optimal_path[-1]!=sink_node_id):
-    #     return None, temp_path
-    # # print(temp_path)
+
     optimal_path.reverse()
     packet = {
         'source': source_node_id,
@@ -519,9 +494,7 @@ def send_data(source_node_id, sink_node_id, nodes, data,size, Elec, epsilon, rho
         'lost': False,
         'size': size
     }
-    # packet['path'].pop()
     dropped=0
-    #print(f"Data packet sent from Source Node {source_node_id} to Sink Node {sink_node_id} with data: {data}")
 
     # Move the packet through the network
     while data>0:
@@ -537,18 +510,15 @@ def send_data(source_node_id, sink_node_id, nodes, data,size, Elec, epsilon, rho
         while packet['current_position'] != sink_node_id:
             if len(packet['path']) == 0:
                 packet['path'].append(sink_node_id)
-                # nodes[packet['current_position']].energy=0
-                # break
+
             next_hop = move_data(packet, nodes)
 
             if next_hop is None:  # Packet dropped due to loss
                 packet['lost'] = True
                 break
-                #print(f"Packet dropped while moving from Node {packet['current_position']}.")
-                # return sent_packets, temp_path
 
             #Update Energy values
-            update_energy(Elec, epsilon, packet['size'], nodes[packet['current_position']], nodes[next_hop], nodes, rho, tau_min, tau_max)
+            update_energy(Elec, epsilon, packet['size'], nodes[packet['current_position']], nodes[next_hop], nodes)
 
             # Update the packet's path and current position
             packet['path'].pop()
@@ -558,8 +528,6 @@ def send_data(source_node_id, sink_node_id, nodes, data,size, Elec, epsilon, rho
             dropped+=1
 
     # If it reaches the sink, add it to the received packets list
-    #print(f"Packet successfully reached Sink Node {sink_node_id} with data: {packet['data']}")
-    # received_packets.append(packet)
     check_energy_levels(nodes, rho, tau_min, tau_max, trivial)
 
     return dropped, temp_path,
@@ -583,13 +551,11 @@ def move_data(packet, nodes):
         next_hop = packet['path'][-1]
 
     if next_hop is not None:
-        #print(f"Moving packet to Node {next_hop} from Node {packet['current_position']}.")
         return next_hop  # Return the next node to which the packet should move
     else:
-        #print(f"Packet lost due to high loss ratio from Node {packet['current_position']}.")
         return None  # Packet dropped due to loss
 
-def update_energy(Eelec, epsilon, l, transmiting_node, receiving_node, nodes, rho, tau_min, tau_max):
+def update_energy(Eelec, epsilon, l, transmiting_node, receiving_node, nodes):
     """
     Calculate the total energy consumption for wireless communication.
     
@@ -622,15 +588,11 @@ def update_energy(Eelec, epsilon, l, transmiting_node, receiving_node, nodes, rh
     if(receiving_node.energy<=0):
         receiving_node.energy=0
         select_new_CH(receiving_node, nodes[1].location)
-        # remove_node(nodes, receiving_node.node_id, rho, tau_min, tau_max)
         
-
     if(transmiting_node.energy<=0):
         transmiting_node.energy=0
         select_new_CH(transmiting_node, nodes[1].location)
-        # remove_node(nodes, transmiting_node.node_id, rho, tau_min, tau_max)
-
-    
+   
     return 
 
 def check_energy_levels(nodes, rho, tau_min, tau_max, trivial=False):
@@ -648,14 +610,8 @@ def check_energy_levels(nodes, rho, tau_min, tau_max, trivial=False):
         # Check if the current CH's energy is less than half of the average cluster energy
         if curr_ch_energy < (0.5 * avg_cluster_energy):
             # Select a new CH
-
             select_new_CH(node, nodes[1].location)
-            # for node in nodes:
-            #     establish_route(node.node_id, 1, nodes, rho,tau_min,tau_max, trivial)
-            # path=generate_data_path(source_node, sink_node.node_id,nodes)
-            # #print(path)
-            # all_paths.append(path)  # Store the current path
-            # all_nodes.append(copy.deepcopy(nodes)) 
+
         if avg_cluster_energy == 0:
             remove_fully_dead_cluster(node, nodes)
 
@@ -670,7 +626,7 @@ def remove_fully_dead_cluster(dead_node, nodes):
             node.pheromone_matrix[i][dead_node.node_id]=0
             node.pheromone_matrix[dead_node.node_id][i]=0
 
-
+#This function is not used because of it's not compatible to our network 
 def select_new_CH_by_BAO(node, sink_node_location, max_iterations=100):
     new_ch_index = -1
 
@@ -775,11 +731,22 @@ def select_new_CH(node, sink_node_location):
     #All nodes have energy zero
     else:
         remove_fully_dead_cluster(node, nodes)
+
+    #Uncomment the below lines to generate visualization
     # all_nodes.append(copy.deepcopy(nodes))  # Store the current state of nodes
     # all_paths.append(generate_data_path(nodes[0],1,nodes))  # Store the current state of nodes
 
 
 def plot_graph(all_nodes, all_paths, show_neighbors=True, show_child=True, interval=5):
+    """
+    To visualize the graph of nodes and paths in an animation.
+
+    :param all_nodes: list of nodes
+    :param all_paths: paths to be visualized
+    :param show_neighbors: flag to show neighboring connections
+    :param show_child: flag to show cluster members
+    :param interval: frame speed
+    """
     fig, ax = plt.subplots(figsize=(6, 6))
 
     # Helper function to update the plot frame by frame
@@ -854,20 +821,11 @@ def plot_graph(all_nodes, all_paths, show_neighbors=True, show_child=True, inter
 
     # Create the animation
     ani = animation.FuncAnimation(fig, update, frames=len(all_nodes), interval=interval, repeat=False)
-    print("Saving animation demo...")
+    
+    # print("Saving animation demo...")
     # ani.save('Path changing demo2.gif', writer='pillow', fps=5)
-    # Show the animation
     plt.show()
 
-# def remove_node(nodes, x, rho, tau_min, tau_max):
-#     nodes[x].energy=0
-#     for neighbor in nodes[x].neighbors:
-#         nodes[0].pheromone_matrix[neighbor][x]=0
-#         nodes[0].pheromone_matrix[x][neighbor]=0
-#     for i in range(5):
-#         establish_route(0, 1, nodes, rho, tau_min, tau_max)
-    
-#     # print("New path: ", generate_data_path(nodes[0],1,nodes))
 
 def priint(matrix):
     print("Pheromone Matrix:")
@@ -898,13 +856,8 @@ def plot_alive_nodes(data):
     plt.ylabel('Number of Alive Nodes')
     plt.title('Alive Nodes Over Rounds')
     
-    # Add a grid for better readability
     plt.grid(True)
-    
-    # Show the legend
     plt.legend()
-    
-    # Show the plot
     plt.show()
 
 def plot_graph_static(nodes, path1, path2=[], show_neighbors=True, show_child=True):
@@ -969,172 +922,119 @@ def plot_graph_static(nodes, path1, path2=[], show_neighbors=True, show_child=Tr
     plt.xlabel("X")
     plt.ylabel("Y")
     plt.title("Graph of Nodes and Edges")
-
-    # Show the legend for source and sink
     plt.legend()
-
-    # Display grid
     plt.grid(True)
-
-    # Show the plot for 0.5 seconds and then close
     plt.show()
-    # plt.pause(0.5)
-    # plt.close()
-
-
-
-def F_Disconnected_N(nodes, rho, tau_min, tau_max, Elec, epsilon):
-    alive_nodes=[]
-    sink_node=nodes[1]
-
-    for node in nodes:
-        if node.node_id != 1:
-            for i in range(5):
-                establish_route(node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max)
-    loop=0
-    mini=0.5
-    total_alive=len(nodes)-1
-    all_sent=[]
-    while (total_alive>0):
-        loop+=1
-        total_alive=0
-        for node in nodes:
-            if node.node_id != 1 and node.energy>0:
-                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, None, 4000, Elec, epsilon, rho, tau_min, tau_max)
-                all_sent.append(opti_path)
-                if(opti_path[-1]==1):
-                    total_alive+=1
-                # if (loop %1000 )==1 and loop>1000:
-                #     # all_nodes.append(copy.deepcopy(nodes))
-                #     for i in range(len(nodes)):
-                #         print((all_sent[-(i+1)]))  
-        
-        # counter=0
-        # total=0
-        # for node in nodes:
-        #     if node.node_id != 1:
-        #         for energy in node.cluster_energies:
-        #             mini=min(mini,energy)
-        #             if energy>0:
-        #                 counter+=1
-        #         total+=counter
-        
-        if((loop%1000 )== 1):
-            print("alive: ", total_alive, "loop: ", loop)
-            priint_energies(nodes)
-        alive_nodes.append((loop,total_alive))
-    
-    return alive_nodes
-
 
 
 def ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop):
+    """
+    Simulate the network life using the EC-ACO algorithm
+    """
+
     alive_nodes=[]
     packet_loss_ratio=[]
     sink_node=nodes[1]
-
+    size_of_packet=400
+    original_packets=10 #default should be None
+    parity_packets=2
     for node in nodes:
         if node.node_id != 1:
             for i in range(5):
                 establish_route(node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max)
     loop=0
     mini=0.5
-    total=len(nodes)
     counter=100
     success=0
-    all_sent=[]
     while (counter>20 and loop<max_loop):
         loop+=1
         for node in nodes:
             if node.node_id != 1 and node.energy>0:
                 node.energy-=8*(10**(-8))
-                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, 12, 400, Elec, epsilon, rho, tau_min, tau_max)
-                if dropped<=2:
-                    success+=1
-                # all_sent.append(opti_path)
-                # if (loop %1000 )==1 and loop>1000:
-                    # all_nodes.append(copy.deepcopy(nodes))
-                    # for i in range(len(nodes)):
-                    #     print((all_sent[-(i+1)]))  
+                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, original_packets+parity_packets, size_of_packet, Elec, epsilon, rho, tau_min, tau_max)
+                if dropped<=parity_packets:
+                    success+=1 
         
         counter=0
-        total=0
         for node in nodes:
             if node.node_id != 1:
                 for energy in node.cluster_energies:
                     mini=min(mini,energy)
                     if energy>0:
                         counter+=1
-                total+=counter
-        
+
+        #Periodically send ants to update pheromones
         if((loop % 200 )==1):
             for node in nodes:
                 if node.node_id != 1:
                     for i in range(5):
                         establish_route(node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max)
 
+        #just to know loop is still running
         if((loop%1000 )== 1):
             print("alive: ", counter, "loop: ", loop)
-            priint_energies(nodes)
+            # priint_energies(nodes)
         alive_nodes.append((loop,counter))
         packet_loss_ratio.append((loop, success))
     
     return alive_nodes, packet_loss_ratio
 
 def trivial_ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop):
+    """
+    Simulate the network life using the trivial ACO algorithm
+    """
     alive_nodes=[]
     packet_loss_ratio=[]
     sink_node=nodes[1]
-
+    size_of_packet=400
+    original_packets=10 #default should be None
     for node in nodes:
         if node.node_id != 1:
             for i in range(5):
                 establish_route(node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max, True)
     loop=0
     mini=0.5
-    total=len(nodes)
     counter=100
     success=0
-    all_sent=[]
     while (counter>20 and loop<max_loop):
         loop+=1
         for node in nodes:
             if node.node_id != 1 and node.energy>0:
-                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, 10, 400, Elec, epsilon, rho, tau_min, tau_max, True)
+                dropped, opti_path = send_data(node.node_id, sink_node.node_id, nodes, original_packets, size_of_packet, Elec, epsilon, rho, tau_min, tau_max, True)
                 if(dropped==0):
                     success+=1
-                    
-                # all_sent.append(opti_path)
-                # if (loop %1000 )==1 and loop>1000:
-                    # all_nodes.append(copy.deepcopy(nodes))
-                    # for i in range(len(nodes)):
-                    #     print((all_sent[-(i+1)]))  
-        
+                 
         counter=0
-        total=0
         for node in nodes:
             if node.node_id != 1:
                 for energy in node.cluster_energies:
                     mini=min(mini,energy)
                     if energy>0:
                         counter+=1
-                # total+=counter
-        
+
+        #Periodically send ants to update pheromones
         if((loop % 200 )==1):
             for node in nodes:
                 if node.node_id != 1:
                     for i in range(5):
                         establish_route(node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max, True)
 
+        #just to know loop is still running
         if((loop%1000 )== 1):
             print("alive: ", counter, "loop: ", loop)
-            priint_energies(nodes)
+            # priint_energies(nodes)
         alive_nodes.append((loop,counter))
         packet_loss_ratio.append((loop, success))
     
     return alive_nodes, packet_loss_ratio
 
-def FDN(nodes, rho, tau_min, tau_max, Elec, epsilon, mini_loss, max_loss):
+def Network_Lifetime(nodes, rho, tau_min, tau_max, Elec, epsilon, mini_loss, max_loss):
+    """
+    Simulate the network life comparison, the packet loss on each node would be a random number between mini_loss and max_loss 
+
+    :param mini_loss: Minimum packet loss %
+    :param max_loss: Maximum packet loss %
+    """
     loss_matrix=np.random.rand(len(nodes),len(nodes)) 
     for i in range(len(nodes)):
         for j in range(len(nodes)):
@@ -1144,42 +1044,48 @@ def FDN(nodes, rho, tau_min, tau_max, Elec, epsilon, mini_loss, max_loss):
         node.loss_matrix=loss_matrix
 
     nodes1=copy.deepcopy(nodes)
+    nodes2=copy.deepcopy(nodes)
     max_loop=5000
-    aco_network_life, aco_packet_loss=ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, max_loop)
-    trivial_aco_network_life, trivial_aco_packet_loss=trivial_ACO_network_life(nodes1, rho, tau_min, tau_max, Elec, epsilon, max_loop)
+    aco_network_life, aco_packet_loss=ACO_network_life(nodes1, rho, tau_min, tau_max, Elec, epsilon, max_loop)
+    trivial_aco_network_life, trivial_aco_packet_loss=trivial_ACO_network_life(nodes2, rho, tau_min, tau_max, Elec, epsilon, max_loop)
     label1="EC-ACO Network Life"
     label2="Trivial ACO Network Life"
     x_axis="Round Number"
     y_axis="Number of Alive Nodes"
-    title='ACO Network Life vs Trivial ACO Network Life'
+    title='EC-ACO Network Life vs Trivial ACO Network Life'
     plot_packet_loss(aco_network_life, trivial_aco_network_life, label1, label2, x_axis, y_axis, title)
     label1="# of EC-ACO Packet Received"
     label2="#of Trivial ACO Packet Received"
     x_axis="Round Number"
     y_axis="Number of Successful Packets"
-    title='# of ACO Packet Received vs # of Trivial ACO Packet Received'
+    title='# of EC-ACO Packet Received vs # of Trivial ACO Packet Received'
     plot_packet_loss(aco_packet_loss, trivial_aco_packet_loss, label1, label2, x_axis, y_axis, title)
 
 def with_erasure(nodes, rho,tau_min, tau_max, number_of_rounds=500):
-    
+    """
+    Simulate  EC-ACO algorithm with Erasure Coding
+    """
     for node in nodes:
-            if node.node_id != 1:
-                for i in range(5):
-                    establish_route(node.node_id, 1, nodes, rho, tau_min, tau_max)
-    print("starting")
+        if node.node_id != 1:
+            for i in range(5):
+                establish_route(node.node_id, 1, nodes, rho, tau_min, tau_max)
     loop=0
     success=0
     erasure_code=[]
+    size_of_packet=400
+    parity_packets=2
+    original_packets=10
     while(loop<number_of_rounds):
         loop+=1
+        #just to know loop is still running
         if(loop%100==1):
             print("Loop: ", loop)
         for node in nodes:
             if node.node_id != 1:
-                dropped, opti_path = send_data(node.node_id, 1, nodes, 120, 40, Elec, epsilon, rho, tau_min, tau_max)
-                if(dropped<=20):
+                dropped, opti_path = send_data(node.node_id, 1, nodes, original_packets+parity_packets, size_of_packet, Elec, epsilon, rho, tau_min, tau_max)
+                if(dropped<=parity_packets):
                     success+=1
-        
+        #Periodically send ants to update pheromones
         if((loop % 200 )==1):
             for node in nodes:
                 if node.node_id != 1:
@@ -1191,19 +1097,31 @@ def with_erasure(nodes, rho,tau_min, tau_max, number_of_rounds=500):
     return erasure_code
 
 def wo_erasure_code(nodes, rho,tau_min, tau_max, number_of_rounds=500):
-    
+    """
+    Simulate  EC-ACO algorithm without Erasure Coding
+    """
+    for node in nodes:
+        if node.node_id != 1:
+            for i in range(5):
+                establish_route(node.node_id, 1, nodes, rho, tau_min, tau_max)
+
     wo_erasure_code=[]
     loop=0
     success=0
+    size_of_packet=400
+    original_packets=10
     while(loop<number_of_rounds):
         loop+=1
+        #just to know loop is still running
         if(loop%100==1):
             print("Loop: ", loop)
         for node in nodes:
             if node.node_id != 1:
-                dropped, opti_path = send_data(node.node_id, 1, nodes, 100, 40, Elec, epsilon, rho, tau_min, tau_max)
+                dropped, opti_path = send_data(node.node_id, 1, nodes, original_packets, size_of_packet, Elec, epsilon, rho, tau_min, tau_max)
                 if(dropped==0):
                     success+=1
+        
+        #Periodically send ants to update pheromones
         if((loop % 200 )==1):
             for node in nodes:
                 if node.node_id != 1:
@@ -1214,6 +1132,10 @@ def wo_erasure_code(nodes, rho,tau_min, tau_max, number_of_rounds=500):
     return wo_erasure_code
 
 def packet_loss_ratio(nodes, rho, tau_min, tau_max, mini_loss, max_loss):
+    """
+    Compare successful packets of EC-ACO with and without Erasure Coding
+    """
+    
     #define np.matrix of size nXn with each entry being a random number between 0.3 to 0.4 and aij=aji
     loss_matrix=np.random.rand(len(nodes),len(nodes)) 
     for i in range(len(nodes)):
@@ -1232,7 +1154,7 @@ def packet_loss_ratio(nodes, rho, tau_min, tau_max, mini_loss, max_loss):
     label2="ACOCR"
     x_axis="Round Number"
     y_axis="Number of Successful Packets"
-    title='Packet Loss Ratio Over Rounds'
+    title='Data Successfully Received Over Rounds'
     plot_packet_loss(w_erasure, wo_erasure, label1, label2, x_axis, y_axis, title)
     print("Data Success Ratio with EC-ACO: ", w_erasure[-1][1]/((len(nodes)-1)*number_of_rounds))
     print("Data Success Ratio ACOCR: ", wo_erasure[-1][1]/((len(nodes)-1)*number_of_rounds))
@@ -1260,15 +1182,15 @@ def plot_packet_loss(first_list, second_list, label1, label2, x_axis, y_axis, ti
 n = 20              # Number of nodes
 side_length = 500    # Side length of square area of network
 energy = 0.5        # Same energy level for all nodes
-r_min = 100            # Neighbor node range
-r_max = 250*(1)            # Neighbor node range
+r_min = 100            # Cluster node range
+r_max = 250           # Neighboring node range
 num_ants = 100        # Number of ants
-initial_pheromone=10.0
+initial_pheromone=10.0 
 rho = 0.1
 tau_max = 40
 tau_min = 2
-Elec = 50*(10**(-9))
-epsilon = 0.00131*(10**(-12))
+Elec = 50*(10**(-9)) # Energy required to transmit one bit
+epsilon = 0.00131*(10**(-12)) #Energy required to amplify one bit
 
 
 
@@ -1282,58 +1204,22 @@ nodes = initialize_nodes(n,side_length, r_min, r_max,energy, num_ants, initial_p
 #     pickle.dump(nodes, file)
 
 
-main_source_node=nodes[0]
-main_sink_node=nodes[1]
-path=[]
-
-plot_graph_static(nodes, path)
-
-# all_paths = []
-# all_nodes = []
-
-
-#Working FDN
-# alive_nodes = FDN(nodes, rho, tau_min, tau_max, Elec, epsilon, 0, 0.15)
+#just to show how the graph looks like
+plot_graph_static(nodes, [])
 
 
 
+#Network_Lifetime Comparison
+# alive_nodes = Network_Lifetime(nodes, rho, tau_min, tau_max, Elec, epsilon, 0, 0.15)
 
+
+#Packet success comparison
 # packet_loss_ratio(nodes, rho, tau_min, tau_max, 0, 0.1)
+
+
+#For EC-ACO visualization (Need to uncomment all_nodes, all_paths code in select_new_CH function)
 # ACO_network_life(nodes, rho, tau_min, tau_max, Elec, epsilon, 5000)
-alive_nodes = FDN(nodes, rho, tau_min, tau_max, Elec, epsilon, 0.10, 0.20)
-# alive_nodes = F_Disconnected_N(nodes, rho, tau_min, tau_max, Elec, epsilon)
 # plot_graph(all_nodes[:100],all_paths[:100], show_neighbors=False, interval=1)
-# plot_alive_nodes(alive_nodes)
 
 
-# for i in range(5):
-#     establish_route(source_node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max)
-#     # priint(source_node.pheromone_matrix)
-#     path=generate_data_path(source_node, sink_node.node_id,nodes)
-#     #print(path)
-#     all_paths.append(path)  # Store the current path
-#     all_nodes.append(copy.deepcopy(nodes))  
-#     # plot_graph(nodes, path, show_neighbors=False)
-# print("Original Path: ", path)
-# lop=0
-# mini=0.5
-# while (abs(mini)>0 ):
-# # for i in range(12000):
-#     send_data(0,1,nodes,"",Elec,epsilon, rho, tau_min, tau_max) 
-#     mini=0.5
-#     lop+=1
-#     for node in nodes:
-#         mini=min(mini, node.energy)
-# print("First dead node ", lop)
-# priint_energies(nodes)
-# path1=path
-# for i in range(5):
-#     establish_route(source_node.node_id, sink_node.node_id, nodes, rho, tau_min, tau_max)
-#     # priint(source_node.pheromone_matrix)
-#     path=generate_data_path(source_node, sink_node.node_id,nodes)
-#     #print(path)
-#     # plot_graph(nodes, path, show_neighbors= False)
-
-# plot_graph(all_nodes, all_paths, show_neighbors=False, interval=0.1)
-
-# # priint_energies(nodes)
+# alive_nodes = Network_Lifetime(nodes, rho, tau_min, tau_max, Elec, epsilon, 0.0, 0.10)
