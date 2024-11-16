@@ -1214,7 +1214,7 @@ plot_graph_static(nodes, [])
 
 
 #Packet success comparison
-# packet_loss_ratio(nodes, rho, tau_min, tau_max, 0, 0.1)
+packet_loss_ratio(nodes, rho, tau_min, tau_max, 0.1, 0.2)
 
 
 #For EC-ACO visualization (Need to uncomment all_nodes, all_paths code in select_new_CH function)
@@ -1222,4 +1222,3 @@ plot_graph_static(nodes, [])
 # plot_graph(all_nodes[:100],all_paths[:100], show_neighbors=False, interval=1)
 
 
-# alive_nodes = Network_Lifetime(nodes, rho, tau_min, tau_max, Elec, epsilon, 0.0, 0.10)
